@@ -5,9 +5,11 @@ FIELDS_TO_DISPLAY = ["number", "opened_at", "short_description", "state", "prior
 
 def run(BASE_URL, s):
     r = s.get(BASE_URL + "/api/now/v1/table/incident?sysparm_query=assignment_group=javascript:getMyGroups()^active=true^assigned_to=^state!=-5")
-    results = r.json()['result']
-    if not results:
-        print("No tickets :)")
+    r = r.json()
+    if 'error' in r:
+        print(r['error']['message'])
+        return
+    results = r['result']
     filtered_results = []
     for r in results:
         filtered_results.append([r[key] for key in FIELDS_TO_DISPLAY])
