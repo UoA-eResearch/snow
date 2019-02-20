@@ -5,14 +5,16 @@ import sys
 from six.moves import input
 
 def handle_command(command):
-    command = command.lower().replace(" ", "_")
+    command = command.lower()
     if command == "help":
         for command in util.commands:
-            print(command.replace("_", " "))
+            print(command)
     else:
         for plugincommand in util.commands:
-            if command == plugincommand:
-                return util.commands[plugincommand](util.BASE_URL, util.s)
+            plugincommandinitials = "".join(word[0] for word in plugincommand.split(" "))
+            if command.startswith(plugincommand) or command.startswith(plugincommandinitials):
+                args = command.replace(plugincommand, "").strip()
+                return util.commands[plugincommand](util.BASE_URL, util.s, args)
         print("Command not found")
 
 if len(sys.argv) > 1:

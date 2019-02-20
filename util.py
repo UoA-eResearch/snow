@@ -17,7 +17,8 @@ for f in os.listdir(path):
     fname, ext = os.path.splitext(f)
     if ext == '.py':
         mod = __import__(fname)
-        commands[fname] = mod.run
+        command = fname.replace("_", " ")
+        commands[command] = mod.run
 sys.path.pop(0)
 
 BASE_URL = "https://uoaprod.service-now.com/"
