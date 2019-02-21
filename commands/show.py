@@ -56,6 +56,9 @@ def run(BASE_URL, s, args):
     if 'error' in r:
         print(r["error"]["message"])
         return
+    if not r['result']:
+        print("Ticket not found")
+        return
     ticket = r['result'][0]
     user = s.get(ticket['u_requestor']['link']).json()["result"]
     for heading, subfields in fields:
