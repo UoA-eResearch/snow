@@ -1,31 +1,78 @@
 #!/usr/bin/env python
 
-import util
 import sys
-from six.moves import input
+import click
+from util import login, list_tasks, show_ticket, patch
 
-def handle_command(command):
-    command = command.lower()
-    if command == "help":
-        for command in util.commands:
-            print(command)
-    else:
-        for plugincommand in util.commands:
-            plugincommandinitials = "".join(word[0] for word in plugincommand.split(" "))
-            if command.startswith(plugincommand) or command.startswith(plugincommandinitials):
-                args = command.replace(plugincommand, "").strip()
-                return util.commands[plugincommand](util.BASE_URL, util.s, args)
-        print("Command not found")
+class AliasedGroup(click.Group):
+    def get_command(self, ctx, cmd_name):
+        rv = click.Group.get_command(self, ctx, cmd_name)
+        if rv is not None:
+            return rv
+        for x in self.list_commands(ctx):
+            initials = "".join([c[0] for c in x.split("_")])
+            if cmd_name == initials:
+                return click.Group.get_command(self, ctx, x)
+        return None
 
-if len(sys.argv) > 1:
-  input = ' '.join(sys.argv[1:])
-  handle_command(input)
-else:
-  #REPL
-  while True:
-    print("Type a command, or type help to list commands")
-    command = input()
-    try:
-      handle_command(command)
-    except Exception as e:
-      print(e)
+@click.group(cls=AliasedGroup)
+@click.option('--debug/--no-debug', default=False)
+@click.pass_context
+def snow(ctx, debug):
+    ctx.obj["BASE_URL"] = login.BASE_URL
+    ctx.obj["s"] = login.login()
+    pass
+
+@snow.command(name="my_groups_work")
+@click.option('--assigned', default="false", help='Filter by assignment status')
+@click.option('--state', default="open", help='Filter by status')
+@click.pass_context
+def my_groups_work(ctx, assigned, state):
+    """Show tickets in your groups"""
+    query = "assignment_group=javascript:getMyGroups()^active=true"
+    if assigned in ["no", "false", "noone"]:
+        query += "^assigned_toISEMPTY"
+    if state in ["open", "unresolved"]:
+        query += "^stateNOT IN-16,6,-2,-3"
+    elif state in ["closed", "resolved"]:
+        query += "^stateIN-16,6,-2,3"
+    
+    list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
+
+@snow.command(name="my_work")
+@click.option('--state', default="open", help='Filter by status')
+@click.pass_context
+def mw(ctx, state):
+    """Show your tickets"""
+    query = "active=true^assigned_to=javascript:getMyAssignments()"
+
+    if state in ["open", "unresolved"]:
+        query += "^stateNOT IN-16,6,-2,-3"
+    elif state in ["closed", "resolved"]:
+        query += "^stateIN-16,6,-2,3"
+    
+    list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
+
+@snow.command(name="show")
+@click.argument('number')
+@click.pass_context
+def show(ctx, number):
+    """Show a ticket"""
+    show_ticket.get_and_print_ticket(ctx.obj, number)
+
+@snow.command(name="comment")
+@click.argument('number')
+@click.pass_context
+def comment(ctx, number):
+    """Add a comment"""
+    patch.patch(ctx.obj, number, "comments")
+
+@snow.command(name="worknotes")
+@click.argument("number")
+@click.pass_context
+def worknotes(ctx, number):
+    """Add worknotes"""
+    patch.patch(ctx.obj, number, "work_notes")
+
+if __name__ == '__main__':
+    snow(obj={})

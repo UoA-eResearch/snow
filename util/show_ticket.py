@@ -1,4 +1,3 @@
-from pprint import pprint
 from bs4 import BeautifulSoup
 
 fields = [
@@ -47,7 +46,9 @@ fields = [
 
 sep = "=" * 10
 
-def run(BASE_URL, s, args):
+def get_and_print_ticket(ctx, args):
+    BASE_URL = ctx["BASE_URL"]
+    s = ctx["s"]
     query = "number=" + args
     url = BASE_URL + "/api/now/table/task"
     params = {
