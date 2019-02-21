@@ -70,13 +70,14 @@ if "auth_redirect" in r.url:
 
 from tabulate import tabulate
 
-FIELDS_TO_DISPLAY = ["number", "opened_at", "short_description", "state", "priority", "severity", "category", "assigned_to", "assignment_group", "u_requestor"]
+FIELDS_TO_DISPLAY = ["number", "opened_at", "short_description", "state", "priority", "assigned_to", "assignment_group", "u_requestor"]
 
 def get_and_print_filtered_tasks(query):
     url = BASE_URL + "/api/now/table/task"
     params = {
         "sysparm_query": query,
-        "sysparm_display_value": "true"
+        "sysparm_display_value": "true",
+        "sysparm_fields": ",".join(FIELDS_TO_DISPLAY)
     }
     r = s.get(url, params=params)
     r = r.json()
