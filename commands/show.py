@@ -38,6 +38,9 @@ fields = [
     ]),
     ("Comments", [
         "comments"
+    ]),
+    ("Work notes", [
+        "work_notes"
     ])
 
 ]
@@ -74,5 +77,7 @@ def run(BASE_URL, s, args):
             if sf == "comments":
                 soup = BeautifulSoup(val, features="lxml")
                 print(soup.get_text().encode("utf-8"))
+            elif sf == "work_notes":
+                print(val)
             else:
                 print("{} = {}".format(sf, val))

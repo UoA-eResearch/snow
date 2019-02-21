@@ -5,6 +5,11 @@ import editor
 def run(BASE_URL, s, args):
     bits = args.split()
     number = bits[0]
+    worknotes = False
+    if len(bits) > 1:
+        if bits[1] == "worknotes" or bits[1] == "work notes" or bits[1] == "wn":
+            worknotes = True
+            del bits[1]
     if sys.stdin.isatty():
         if len(bits) > 1:
             message = " ".join(bits[1:])
@@ -31,9 +36,14 @@ def run(BASE_URL, s, args):
     
     sys_id = ticket["sys_id"]
 
-    data = {
-        "comments": message
-    }
+    if worknotes:
+        data = {
+            "work_notes": message
+        }
+    else:
+        data = {
+            "comments": message
+        }
     url = BASE_URL + "/api/now/table/task/" + sys_id
     r = s.patch(url, json = data, headers = {"X-no-response-body": "true"})
     if r.status_code == 204:
