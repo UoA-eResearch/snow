@@ -1,17 +1,17 @@
 from pprint import pprint
 import sys
+import editor
 
 def run(BASE_URL, s, args):
     bits = args.split()
     number = bits[0]
     if sys.stdin.isatty():
         if len(bits) > 1:
-            args = " ".join(bits[1:])
+            message = " ".join(bits[1:])
         else:
-            # editor
-            pass
+            message = editor.edit()
     else:
-        args = sys.stdin.read()
+        message = sys.stdin.read()
     query = "number=" + number
     url = BASE_URL + "/api/now/table/task"
     params = {
@@ -32,7 +32,7 @@ def run(BASE_URL, s, args):
     sys_id = ticket["sys_id"]
 
     data = {
-        "comments": args
+        "comments": message
     }
     url = BASE_URL + "/api/now/table/task/" + sys_id
     r = s.patch(url, json = data, headers = {"X-no-response-body": "true"})
