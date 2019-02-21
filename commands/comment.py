@@ -1,9 +1,17 @@
 from pprint import pprint
+import sys
 
 def run(BASE_URL, s, args):
     bits = args.split()
     number = bits[0]
-    args = " ".join(bits[1:])
+    if sys.stdin.isatty():
+        if len(bits) > 1:
+            args = " ".join(bits[1:])
+        else:
+            # editor
+            pass
+    else:
+        args = sys.stdin.read()
     query = "number=" + number
     url = BASE_URL + "/api/now/table/task"
     params = {
