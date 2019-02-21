@@ -70,6 +70,6 @@ def run(BASE_URL, s, args):
                 val = val["display_value"]
             if sf == "comments":
                 soup = BeautifulSoup(val, features="lxml")
-                print(soup.get_text())
+                print(soup.get_text().encode("utf-8"))
             else:
                 print("{} = {}".format(sf, val))
