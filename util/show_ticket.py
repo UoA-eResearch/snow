@@ -1,4 +1,5 @@
 from bs4 import BeautifulSoup
+import json
 
 fields = [
     ("Ticket details", [
@@ -64,6 +65,8 @@ def get_and_print_ticket(ctx, args):
         print("Ticket not found")
         return
     ticket = r['result'][0]
+    if ctx["debug"]:
+        print(json.dumps(ticket, indent=4, sort_keys=True))
     user = s.get(ticket['u_requestor']['link']).json()["result"]
     for heading, subfields in fields:
         print("\n{}\n{}\n".format(heading, sep))

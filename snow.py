@@ -16,39 +16,40 @@ class AliasedGroup(click.Group):
         return None
 
 @click.group(cls=AliasedGroup)
-@click.option('--debug/--no-debug', default=False)
+@click.option('--debug', "-d", is_flag=True, default=False)
 @click.pass_context
 def snow(ctx, debug):
     ctx.obj["BASE_URL"] = login.BASE_URL
     ctx.obj["s"] = login.login()
+    ctx.obj["debug"] = debug
     pass
 
 @snow.command(name="my_groups_work")
-@click.option('--assigned', default="false", help='Filter by assignment status')
-@click.option('--state', default="open", help='Filter by status')
+@click.option('--assigned', "-a", default="false", help='Filter by assignment status')
+@click.option('--state', "-s", default="open", help='Filter by status')
 @click.pass_context
 def my_groups_work(ctx, assigned, state):
     """Show tickets in your groups"""
     query = "assignment_group=javascript:getMyGroups()^active=true"
     if assigned in ["no", "false", "noone"]:
         query += "^assigned_toISEMPTY"
-    if state in ["open", "unresolved"]:
+    if state in ["open", "unresolved", "unsolved"]:
         query += "^stateNOT IN-16,6,-2,-3"
-    elif state in ["closed", "resolved"]:
+    elif state in ["closed", "resolved", "solved"]:
         query += "^stateIN-16,6,-2,3"
     
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
 
 @snow.command(name="my_work")
-@click.option('--state', default="open", help='Filter by status')
+@click.option('--state', "-s", default="open", help='Filter by status')
 @click.pass_context
 def mw(ctx, state):
     """Show your tickets"""
     query = "active=true^assigned_to=javascript:getMyAssignments()"
 
-    if state in ["open", "unresolved"]:
+    if state in ["open", "unresolved", "unsolved"]:
         query += "^stateNOT IN-16,6,-2,-3"
-    elif state in ["closed", "resolved"]:
+    elif state in ["closed", "resolved", "solved"]:
         query += "^stateIN-16,6,-2,3"
     
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
@@ -73,6 +74,13 @@ def comment(ctx, number):
 def worknotes(ctx, number):
     """Add worknotes"""
     patch.patch(ctx.obj, number, "work_notes")
+
+@snow.command(name="resolve")
+@click.argument("number")
+@click.pass_context
+def resolve(ctx, number):
+    """Add worknotes"""
+    patch.patch(ctx.obj, number, "resolve")
 
 if __name__ == '__main__':
     snow(obj={})

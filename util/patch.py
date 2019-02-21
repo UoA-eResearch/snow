@@ -1,4 +1,3 @@
-from pprint import pprint
 import sys
 import editor
 
@@ -28,12 +27,19 @@ def patch(ctx, number, field):
     
     sys_id = ticket["sys_id"]
 
-    data = {
-        field: message
-    }
+    if field == "resolve":
+        data = {
+            "state": "Resolved",
+            "close_notes": message
+        }
+    else:
+        data = {
+            field: message
+        }
+
     url = BASE_URL + "/api/now/table/task/" + sys_id
     r = s.patch(url, json = data, headers = {"X-no-response-body": "true"})
     if r.status_code == 204:
         print("Success")
     else:
-        print("Error")
+        print(r.json()["error"])
