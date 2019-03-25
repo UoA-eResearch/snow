@@ -8,6 +8,9 @@ def patch(ctx, number, field):
         message = editor.edit()
     else:
         message = sys.stdin.read()
+    if not message:
+        print("Aborted - no message")
+        return
     query = "number=" + number
     url = BASE_URL + "/api/now/table/task"
     params = {

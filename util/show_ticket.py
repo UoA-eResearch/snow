@@ -63,6 +63,7 @@ def get_and_print_ticket(ctx, args):
         return
     ticket = r['result'][0]
     if ctx["debug"]:
+        print(ticket["comments"])
         print(json.dumps(ticket, indent=4, sort_keys=True))
     user = s.get(ticket['u_requestor']['link']).json()["result"]
     for heading, subfields in fields:
