@@ -30,7 +30,7 @@ def snow(ctx, debug):
 @click.pass_context
 def my_groups_work(ctx, assigned, state):
     """Show tickets in your groups"""
-    query = "assignment_group=javascript:getMyGroups()^active=true"
+    query = "assignment_group=javascript:getMyGroups()^active=true^ORDERBYnumber"
     if assigned in ["no", "false", "noone"]:
         query += "^assigned_toISEMPTY"
     if state in ["open", "unresolved", "unsolved"]:
@@ -45,7 +45,7 @@ def my_groups_work(ctx, assigned, state):
 @click.pass_context
 def mw(ctx, state):
     """Show your tickets"""
-    query = "active=true^assigned_to=javascript:getMyAssignments()"
+    query = "active=true^assigned_to=javascript:getMyAssignments()^ORDERBYnumber"
 
     if state in ["open", "unresolved", "unsolved"]:
         query += "^stateNOT IN-16,6,-2,-3"
