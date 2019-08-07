@@ -79,7 +79,7 @@ def worknotes(ctx, number):
 @click.argument("number")
 @click.pass_context
 def resolve(ctx, number):
-    """Add worknotes"""
+    """Resolve a ticket"""
     patch.patch(ctx.obj, number, "resolve")
 
 if __name__ == '__main__':

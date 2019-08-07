@@ -8,6 +8,8 @@ import sys
 from six.moves import input
 import re
 
+session_cache_path = os.path.join(sys.path[0], "session_cache")
+
 BASE_URL = "https://uoaprod.service-now.com/"
 INCORRECT_CREDENTIAL_STRING = "The combination of credentials you have entered is incorrect"
 INCORRECT_2FA_STRING = "The token you have entered is not correct"
@@ -15,7 +17,7 @@ INCORRECT_2FA_STRING = "The token you have entered is not correct"
 def login():
     # Load a previous session if one exists, otherwise make a new session
     try:
-        with open('session_cache') as f:
+        with open(session_cache_path) as f:
             s = pickle.load(f)
     except IOError:
         s = requests.Session()
@@ -52,7 +54,7 @@ def login():
             print("Navigated to " + r.url)
             csrf_token = re.search(r"var g_ck = '(\w+)';", r.content).group(1)
             s.headers['X-UserToken'] = csrf_token
-            with open('session_cache', 'w') as f:
+            with open(session_cache_path, 'w') as f:
                 pickle.dump(s, f)
 
 
