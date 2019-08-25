@@ -37,7 +37,7 @@ def my_groups_work(ctx, assigned, state):
         query += "^stateNOT IN-16,6,-2,-3"
     elif state in ["closed", "resolved", "solved"]:
         query += "^stateIN-16,6,-2,3"
-    
+
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
 
 @snow.command(name="my_work")
@@ -51,7 +51,7 @@ def mw(ctx, state):
         query += "^stateNOT IN-16,6,-2,-3"
     elif state in ["closed", "resolved", "solved"]:
         query += "^stateIN-16,6,-2,3"
-    
+
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
 
 @snow.command(name="show")
