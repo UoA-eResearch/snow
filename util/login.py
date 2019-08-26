@@ -38,7 +38,7 @@ class TLSAdapter(adapters.HTTPAdapter):
 def login():
     # Load a previous session if one exists, otherwise make a new session
     try:
-        with open(session_cache_path) as f:
+        with open(session_cache_path, 'rb') as f:
             s = pickle.load(f)
     except (IOError, EOFError):
         s = requests.Session()
@@ -76,7 +76,7 @@ def login():
             print("Navigated to " + r.url)
             csrf_token = re.search(r"var g_ck = '(\w+)';", r.text).group(1)
             s.headers['X-UserToken'] = csrf_token
-            with open(session_cache_path, 'w') as f:
+            with open(session_cache_path, 'wb') as f:
                 pickle.dump(s, f)
 
     return s
