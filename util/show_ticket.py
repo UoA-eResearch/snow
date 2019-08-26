@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 import json
+import re
 
 fields = [
     ("Ticket details", [

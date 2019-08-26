@@ -2,7 +2,7 @@
 
 import sys
 import click
-from util import login, list_tasks, show_ticket, patch
+from util import login, list_tasks, show_ticket, ticket_yaml, patch
 
 class AliasedGroup(click.Group):
     def get_command(self, ctx, cmd_name):
@@ -60,6 +60,13 @@ def mw(ctx, state):
 def show(ctx, number):
     """Show a ticket"""
     show_ticket.get_and_print_ticket(ctx.obj, number)
+
+@snow.command(name="extract_yaml")
+@click.argument('number')
+@click.pass_context
+def download_yaml(ctx, number):
+    """Show a ticket"""
+    ticket_yaml.extract(ctx.obj, number)
 
 @snow.command(name="comment")
 @click.argument('number')
