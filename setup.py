@@ -4,8 +4,8 @@ from setuptools import setup, find_packages
 
 setup(
     name='snow',
-    packages=find_packages(),
     version='0.0.1',  # Required
+    packages=['snow', 'snow.util'],
     url='https://github.com/UoA-eResearch/snow.git',
     description='service now cli',
     long_description=open('README.md').read(),
