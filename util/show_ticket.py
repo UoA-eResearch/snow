@@ -78,7 +78,7 @@ def get_and_print_ticket(ctx, args):
                 val = val["display_value"]
             if sf.startswith("comments"):
                 soup = BeautifulSoup(val, features="html5lib")
-                print(soup.get_text().encode("utf-8"))
+                print(soup.get_text())
             elif sf == "work_notes":
                 print(val)
             else:
