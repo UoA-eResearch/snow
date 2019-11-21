@@ -17,22 +17,27 @@ class AliasedGroup(click.Group):
 
 @click.group(cls=AliasedGroup)
 @click.option('--debug', "-d", is_flag=True, default=False)
+@click.option('--format', "-f", default="table", help='Output format')
 @click.pass_context
-def snow(ctx, debug):
+def snow(ctx, debug, format):
     ctx.obj["BASE_URL"] = login.BASE_URL
     ctx.obj["s"] = login.login()
     ctx.obj["debug"] = debug
+    ctx.obj["format"] = format
     pass
 
 @snow.command(name="my_groups_work")
 @click.option('--assigned', "-a", default="false", help='Filter by assignment status')
 @click.option('--state', "-s", default="open", help='Filter by status')
+@click.option('--active', "-l", default="true", help='Filter by active status')
 @click.pass_context
-def my_groups_work(ctx, assigned, state):
+def my_groups_work(ctx, assigned, state, active):
     """Show tickets in your groups"""
-    query = "assignment_group=javascript:getMyGroups()^active=true^ORDERBYnumber"
+    query = "assignment_group=javascript:getMyGroups()^ORDERBYnumber"
     if assigned in ["no", "false", "noone"]:
         query += "^assigned_toISEMPTY"
+    if active in ["true", "yes"]:
+        query += "^active=true"
     if state in ["open", "unresolved", "unsolved"]:
         query += "^stateNOT IN-16,6,-2,-3"
     elif state in ["closed", "resolved", "solved"]:
