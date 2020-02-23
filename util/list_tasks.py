@@ -9,7 +9,7 @@ def get_and_print_filtered_tasks(ctx, query):
     url = BASE_URL + "/api/now/table/task"
     fields = FIELDS_TO_DISPLAY
     if ctx["format"] == "json":
-        fields.extend(["cmdb_ci", "u_business_service", "subcategory", "u_resolved", "closed_at", "business_duration", "sys_updated_on"])
+        fields.extend(["cmdb_ci", "u_business_service", "subcategory", "u_resolved", "closed_at", "business_duration", "sys_created_on", "sys_updated_on"])
     params = {
         "sysparm_query": query,
         "sysparm_display_value": "true",
