@@ -74,7 +74,7 @@ def login():
                 form[input_elem['name']] = input_elem['value']
             r = s.post(form['RelayState'], form)
             print("Navigated to " + r.url)
-            csrf_token = re.search(r"var g_ck = '(\w+)';", r.text).group(1)
+            csrf_token = re.search(r"g_ck = '(\w+)';", r.text).group(1)
             s.headers['X-UserToken'] = csrf_token
             with open(session_cache_path, 'wb') as f:
                 pickle.dump(s, f)
