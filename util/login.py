@@ -55,7 +55,7 @@ def login():
 
         r = s.get(sysparm_url)
         print("Navigated to " + r.url)
-        if r.url == "https://iam.auckland.ac.nz/profile/SAML2/Redirect/SSO?execution=e1s1":
+        if r.url.startswith("https://iam.auckland.ac.nz/profile/SAML2/Redirect/SSO"):
             r = s.post(r.url, { "j_username": config.username, "j_password": config.password, "submitted": 0, "_eventId_proceed": "" })
             print("Entered username and password")
             if INCORRECT_CREDENTIAL_STRING in r.text:
