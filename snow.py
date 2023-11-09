@@ -94,5 +94,12 @@ def resolve(ctx, number):
     """Resolve a ticket"""
     patch.patch(ctx.obj, number, "resolve")
 
+@snow.command(name="set_third_party_reference")
+@click.argument("number")
+@click.pass_context
+def set_third_party_reference(ctx, number):
+    """Set third party reference"""
+    patch.patch(ctx.obj, number, "u_third_party_reference")
+
 if __name__ == '__main__':
     snow(obj={})
