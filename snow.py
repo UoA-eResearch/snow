@@ -101,5 +101,12 @@ def set_third_party_reference(ctx, number):
     """Set third party reference"""
     patch.patch(ctx.obj, number, "u_third_party_reference")
 
+@snow.command(name="set_customer_promise")
+@click.argument("number")
+@click.pass_context
+def set_customer_promise(ctx, number):
+    """Set customer promise"""
+    patch.patch(ctx.obj, number, "u_customer_promise")
+
 if __name__ == '__main__':
     snow(obj={})
