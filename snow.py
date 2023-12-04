@@ -2,7 +2,7 @@
 
 import sys
 import click
-from util import login, list_tasks, show_ticket, patch, ticket_yaml
+from util import login, list_tasks, show_ticket, patch, ticket_yaml, comments, ticket_properties
 
 class AliasedGroup(click.Group):
     def get_command(self, ctx, cmd_name):
@@ -24,6 +24,7 @@ def snow(ctx, debug, format):
     ctx.obj["s"] = login.login()
     ctx.obj["debug"] = debug
     ctx.obj["format"] = format
+    ctx.obj["api"] = False
     pass
 
 @snow.command(name="my_groups_work")
@@ -72,6 +73,20 @@ def show(ctx, number):
 def download_yaml(ctx, number):
     """Write original request to file"""
     ticket_yaml.extract(ctx.obj, number)
+
+@snow.command(name="get_user_comments")
+@click.argument('number')
+@click.pass_context
+def get_user_comments(ctx, number):
+    """Get only comments from users, excluding automation comments"""
+    comments.get_user_comments(ctx.obj, number)
+
+@snow.command(name="get_ticket_status")
+@click.argument('number')
+@click.pass_context
+def get_ticket_status(ctx, number):
+    """Get ticket status"""
+    ticket_properties.get_ticket_status(ctx.obj, number)
 
 @snow.command(name="comment")
 @click.argument('number')
