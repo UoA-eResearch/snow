@@ -12,7 +12,7 @@ from requests import adapters
 from six.moves import input
 from urllib3 import poolmanager
 
-import config
+from .. import config
 
 session_cache_path = os.path.join(sys.path[0], "session_cache")
 

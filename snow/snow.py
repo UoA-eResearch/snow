@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
-import sys
 import click
-from util import login, list_tasks, show_ticket, patch, ticket_yaml, comments, ticket_properties
+from .util import login, list_tasks, show_ticket, patch, ticket_yaml, comments, ticket_properties
 
 class AliasedGroup(click.Group):
     def get_command(self, ctx, cmd_name):
@@ -20,6 +19,7 @@ class AliasedGroup(click.Group):
 @click.option('--format', "-f", default="table", help='Output format')
 @click.pass_context
 def snow(ctx, debug, format):
+    ctx.ensure_object(dict)
     ctx.obj["BASE_URL"] = login.BASE_URL
     ctx.obj["s"] = login.login()
     ctx.obj["debug"] = debug
@@ -86,7 +86,7 @@ def get_user_comments(ctx, number):
 @click.pass_context
 def get_ticket_status(ctx, number):
     """Get ticket status"""
-    ticket_properties.get_ticket_status(ctx.obj, number)
+    ticket_properties.get(ctx, number, "state")
 
 @snow.command(name="comment")
 @click.argument('number')

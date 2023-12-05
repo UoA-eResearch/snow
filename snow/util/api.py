@@ -1,4 +1,4 @@
-from util import login, comments, ticket_properties
+from . import login, comments, ticket_properties
 
 
 class Snow:
