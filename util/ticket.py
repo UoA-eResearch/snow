@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- encoding: utf-8 -*-
-
 def get_ticket(ctx, ticket_number):
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]

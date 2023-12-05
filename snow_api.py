@@ -12,5 +12,8 @@ class Snow:
     def get_user_comments(self, ticket_number):
         return comments.get_user_comments(self.ctx, ticket_number)
 
-    def get_ticket_status(self, ticket_number):
-        return ticket_properties.get_ticket_status(self.ctx, ticket_number)
+    def get_ticket_property(self, ticket_number, property):
+        return ticket_properties.get(self.ctx, ticket_number, property)
+
+    def patch_ticket_property(self, ticket_number, property, value):
+        return ticket_properties.patch(self.ctx, ticket_number, property, value)
