@@ -21,7 +21,7 @@ BASE_URL = "https://uoaprod.service-now.com/"
 INCORRECT_CREDENTIAL_STRING = "The combination of credentials you have entered is incorrect"
 INCORRECT_2FA_STRING = "The token you have entered is not correct"
 
-if os.getenv("SNOW_USERNAME") and os.getenv("SNOW_PASSWORD"):
+if os.getenv("SNOW_USERNAME") and os.getenv("SNOW_PWD"):
     config = type("Config", (object,), {})
     config.username = os.getenv("SNOW_USERNAME")
     config.password = os.getenv("SNOW_PWD")
