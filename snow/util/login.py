@@ -12,7 +12,10 @@ from requests import adapters
 from six.moves import input
 from urllib3 import poolmanager
 
-session_cache_path = os.path.join(sys.path[0], "session_cache")
+if os.getenv("SNOW_SESSIONFILE"):
+    session_cache_path = os.getenv("SNOW_SESSIONFILE")
+else:
+    session_cache_path = os.path.join(sys.path[0], "session_cache")
 
 BASE_URL = "https://uoaprod.service-now.com/"
 INCORRECT_CREDENTIAL_STRING = "The combination of credentials you have entered is incorrect"
@@ -38,6 +41,7 @@ class TLSAdapter(adapters.HTTPAdapter):
                 block=block,
                 ssl_version=ssl.PROTOCOL_TLS,
                 ssl_context=ctx)
+
 
 def login():
     # Load a previous session if one exists, otherwise make a new session
