@@ -3,6 +3,7 @@ import json
 
 FIELDS_TO_DISPLAY = ["number", "opened_at", "short_description", "state", "priority", "assigned_to", "assignment_group", "u_requestor"]
 
+
 def get_and_print_filtered_tasks(ctx, query):
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]

@@ -1,4 +1,4 @@
-from . import login, comments, ticket_properties
+from . import login, comments, ticket_properties, patch
 
 
 class Snow:
@@ -17,3 +17,6 @@ class Snow:
 
     def patch_ticket_property(self, ticket_number, property, value):
         return ticket_properties.patch(self.ctx, ticket_number, property, value)
+
+    def add_worknote(self, ticket_number, message):
+        return patch.patch(self.ctx, ticket_number, "work_notes", message)

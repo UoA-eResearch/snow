@@ -1,13 +1,15 @@
 import sys
 import editor
 
-def patch(ctx, number, field):
+
+def patch(ctx, number, field, message=None):
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]
-    if sys.stdin.isatty():
-        message = editor.edit()
-    else:
-        message = sys.stdin.read()
+    if not message:
+        if sys.stdin.isatty():
+            message = editor.edit()
+        else:
+            message = sys.stdin.read()
     if not message:
         print("Aborted - no message")
         return
@@ -27,7 +29,7 @@ def patch(ctx, number, field):
         print("Ticket not found")
         return
     ticket = r['result'][0]
-    
+
     sys_id = ticket["sys_id"]
 
     if field == "resolve":
@@ -41,7 +43,7 @@ def patch(ctx, number, field):
         }
 
     url = BASE_URL + "/api/now/table/task/" + sys_id
-    r = s.patch(url, json = data, headers = {"X-no-response-body": "true"})
+    r = s.patch(url, json=data, headers={"X-no-response-body": "true"})
     if r.status_code == 204:
         print("Success")
     else:
