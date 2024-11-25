@@ -25,3 +25,6 @@ class Snow:
         t = ticket.get_ticket(self.ctx, ticket_number)
         work_notes = t['work_notes']
         return work_notes
+
+    def get_ticket(self, ticket_number):
+        return ticket.get_ticket(self.ctx, ticket_number)
