@@ -31,21 +31,24 @@ def snow(ctx, debug, format):
 
 
 @snow.command(name="my_groups_work")
-@click.option('--assigned', "-a", default="false", help='Filter by assignment status')
-@click.option('--state', "-s", default="open", help='Filter by status')
-@click.option('--active', "-l", default="true", help='Filter by active status')
+@click.option('--assigned', "-a", is_flag=True, show_default=True, default=False, help='Filter by assignment status')
+@click.option('--state', "-s", default="open", show_default=True, help='Filter by status')
+@click.option('--active', "-l", is_flag=True, show_default=True, default=True, help='Filter by active status')
+@click.option('--offboard', "-o", is_flag=True, show_default=True, default=False, help='Include offboarding tickets')
 @click.pass_context
-def my_groups_work(ctx, assigned, state, active):
+def my_groups_work(ctx, assigned, state, active, offboard):
     """Show tickets in your groups"""
-    query = "assignment_group=javascript:getMyGroups()^ORDERBYnumber"
-    if assigned in ["no", "false", "noone"]:
+    query = "assignment_group=javascript:getMyGroups()^sys_class_name!=u_security_vulnerabilities^ORDERBYnumber"
+    if not assigned:
         query += "^assigned_toISEMPTY"
-    if active in ["true", "yes"]:
+    if active:
         query += "^active=true"
     if state in ["open", "unresolved", "unsolved"]:
         query += "^stateNOT IN-16,6,-2,-3"
     elif state in ["closed", "resolved", "solved"]:
         query += "^stateIN-16,6,-2,3"
+    if not offboard:
+        query += "^u_third_party_referenceNOT LIKEOffboard^ORu_third_party_referenceISEMPTY"
 
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
 
