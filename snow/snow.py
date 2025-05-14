@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
 import click
-from .util import login, list_tasks, show_ticket, patch, ticket_yaml, comments, ticket_properties
-
+from .util import login, list_tasks, show_ticket, patch, ticket_yaml, comments, ticket_properties, ticket as ticket_util
+from colorama import Fore, Back, Style # For terminal colours
+from pprint import pprint
 
 class AliasedGroup(click.Group):
     def get_command(self, ctx, cmd_name):
@@ -51,6 +52,74 @@ def my_groups_work(ctx, assigned, state, active, offboard):
         query += "^u_third_party_referenceNOT LIKEOffboard^ORu_third_party_referenceISEMPTY"
 
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
+
+@snow.command(name="email_check")
+@click.option('--assigned', "-a", is_flag=True, show_default=True, default=False, help='Filter by assignment status')
+@click.option('--state', "-s", default="open", show_default=True, help='Filter by status')
+@click.option('--active', "-l", is_flag=True, show_default=True, default=True, help='Filter by active status')
+@click.option('--offboard', "-o", is_flag=True, show_default=True, default=False, help='Include offboarding tickets')
+@click.pass_context
+def email_check(ctx, assigned, state, active, offboard):
+    query = "assignment_group=javascript:getMyGroups()^sys_class_name!=u_security_vulnerabilities^ORDERBYnumber"
+    if not assigned:
+        query += "^assigned_toISEMPTY"
+    if active:
+        query += "^active=true"
+    if state in ["open", "unresolved", "unsolved"]:
+        query += "^stateNOT IN-16,6,-2,-3"
+    elif state in ["closed", "resolved", "solved"]:
+        query += "^stateIN-16,6,-2,3"
+    if not offboard:
+        query += "^u_third_party_referenceNOT LIKEOffboard^ORu_third_party_referenceISEMPTY"
+
+    tickets = list_tasks.get_filtered_tasks(ctx.obj, query)
+    for ticket in tickets:
+        number = ticket["number"]["value"]
+        if number.startswith("SCTASK"):
+            # Get RITM parent, as that's where the email records are
+            number = ticket["parent"]["display_value"]
+            id = ticket["parent"]["value"]
+        elif number.startswith("INC"):
+            id = ticket["sys_id"]["value"]
+        else:
+            continue
+
+        if ticket["u_requestor"]["display_value"] == 'CeR RESTAPI':
+            requestor_id = ticket["u_affected_contact"]["value"]
+        else:
+            requestor_id = ticket["u_requestor"]["value"]
+        # Populate a full user object, to get the requestor's UPI and email address
+        requestor = ticket_util.get_user_by_sys_id(ctx.obj, requestor_id)
+        requestor_email = requestor.get("email")
+        requestor_upi = requestor.get("user_name")
+        comments = ticket_util.get_comments_for_ticket(ctx.obj, id)
+        # Filter out comments by the requestor, and filter out work_notes
+        comments = [c for c in comments if c["sys_created_by"]["value"] != requestor_upi and c["element"]["value"] == "comments"]
+        if not comments:
+            print(f"{number} has no comments")
+            continue
+        #pprint(comments)
+        last_comment = comments[-1]
+        last_comment_by = last_comment["sys_created_by"]["value"]
+        last_comment_on = last_comment["sys_created_on"]["value"]
+        print(f"{number}: Latest comment at {last_comment_on} by {last_comment_by}")
+        emails = ticket_util.get_emails_for_ticket(ctx.obj, id)
+        # Filter to just emails notifying the requestor
+        emails = [e for e in emails if requestor_email in e["recipients"]["value"]]
+        if not emails:
+            print(f"{Fore.RED}No emails to {requestor_email} on ticket {number}{Style.RESET_ALL}")
+        else:
+            last_email = emails[-1]
+            last_email_by = last_email["sys_created_by"]["value"]
+            last_email_on = last_email["sys_created_on"]["value"]
+            last_email_to = last_email["recipients"]["value"]
+            subject = last_email["subject"]["value"]
+            print(f"Latest email at {last_email_on} to {last_email_to}: {subject}")
+            if last_email_on < last_comment_on:
+    #            pprint(last_email)
+    #            pprint(last_comment)
+                print(f"{Fore.RED}No email notifying {requestor_email} sent for last comment on ticket {number} by {last_comment_by}{Style.RESET_ALL}")
+        print("-"*10)
 
 
 @snow.command(name="my_work")

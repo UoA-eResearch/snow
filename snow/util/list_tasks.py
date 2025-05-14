@@ -3,6 +3,24 @@ import json
 
 FIELDS_TO_DISPLAY = ["number", "opened_at", "short_description", "state", "priority", "assigned_to", "assignment_group", "u_requestor"]
 
+def get_filtered_tasks(ctx, query):
+    BASE_URL = ctx["BASE_URL"]
+    s = ctx["s"]
+    url = BASE_URL + "/api/now/table/task"
+    fields = FIELDS_TO_DISPLAY
+    if ctx["format"] == "json":
+        fields.extend(["cmdb_ci", "u_business_service", "subcategory", "u_resolved", "closed_at", "business_duration", "sys_created_on", "sys_updated_on"])
+    params = {
+        "sysparm_query": query,
+        "sysparm_display_value": "all",
+        #"sysparm_fields": ",".join(fields)
+    }
+    r = s.get(url, params=params)
+    r = r.json()
+    if 'error' in r:
+        print(r["error"]["message"])
+        return
+    return r["result"]
 
 def get_and_print_filtered_tasks(ctx, query):
     BASE_URL = ctx["BASE_URL"]
