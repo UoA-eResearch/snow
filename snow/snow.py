@@ -54,7 +54,7 @@ def my_groups_work(ctx, assigned, state, active, offboard):
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
 
 @snow.command(name="email_check")
-@click.option('--assigned', "-a", is_flag=True, show_default=True, default=False, help='Filter by assignment status')
+@click.option('--assigned', "-a", is_flag=True, show_default=True, default=True, help='Filter by assignment status')
 @click.option('--state', "-s", default="open", show_default=True, help='Filter by status')
 @click.option('--active', "-l", is_flag=True, show_default=True, default=True, help='Filter by active status')
 @click.option('--offboard', "-o", is_flag=True, show_default=True, default=False, help='Include offboarding tickets')
