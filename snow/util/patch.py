@@ -1,4 +1,5 @@
 import sys
+import json
 import editor
 
 
@@ -11,7 +12,11 @@ def patch(ctx, number, field, message=None):
         else:
             message = sys.stdin.read()
     if not message:
-        print("Aborted - no message")
+        msg = "Aborted - no message"
+        if ctx["format"] == "json":
+            print(json.dumps({"error": msg}))
+        else:
+            print(msg)
         return
     query = "number=" + number
     url = BASE_URL + "/api/now/table/task"
@@ -23,10 +28,18 @@ def patch(ctx, number, field, message=None):
     r = s.get(url, params=params)
     r = r.json()
     if 'error' in r:
-        print(r["error"]["message"])
+        error_msg = r["error"]["message"]
+        if ctx["format"] == "json":
+            print(json.dumps({"error": error_msg}))
+        else:
+            print(error_msg)
         return
     if not r['result']:
-        print("Ticket not found")
+        msg = "Ticket not found"
+        if ctx["format"] == "json":
+            print(json.dumps({"error": msg}))
+        else:
+            print(msg)
         return
     ticket = r['result'][0]
 
@@ -44,7 +57,24 @@ def patch(ctx, number, field, message=None):
 
     url = BASE_URL + "/api/now/table/task/" + sys_id
     r = s.patch(url, json=data, headers={"X-no-response-body": "true"})
-    if r.status_code == 204:
-        print("Success")
+
+    if ctx["format"] == "json":
+        if r.status_code == 204:
+            output = {
+                "ticket_number": number,
+                "field": field,
+                "status": "success"
+            }
+        else:
+            output = {
+                "ticket_number": number,
+                "field": field,
+                "status": "error",
+                "error": r.json()["error"]
+            }
+        print(json.dumps(output, indent=4))
     else:
-        print(r.json()["error"])
+        if r.status_code == 204:
+            print("Success")
+        else:
+            print(r.json()["error"])

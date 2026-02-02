@@ -44,6 +44,7 @@ fields = [
 
 sep = "=" * 10
 
+
 def get_and_print_ticket(ctx, args):
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]
@@ -56,12 +57,29 @@ def get_and_print_ticket(ctx, args):
     r = s.get(url, params=params)
     r = r.json()
     if 'error' in r:
-        print(r["error"]["message"])
+        error_msg = r["error"]["message"]
+        if ctx["format"] == "json":
+            print(json.dumps({"error": error_msg}))
+        else:
+            print(error_msg)
         return
     if not r['result']:
-        print("Ticket not found")
+        msg = "Ticket not found"
+        if ctx["format"] == "json":
+            print(json.dumps({"error": msg}))
+        else:
+            print(msg)
         return
     ticket = r['result'][0]
+
+    if ctx["format"] == "json":
+        # For JSON output, get user info and merge it with ticket
+        user = s.get(ticket['u_requestor']['link']).json()["result"]
+        output = {"ticket": ticket, "user": user}
+        print(json.dumps(output, indent=4, sort_keys=True))
+        return
+
+    # Text output (original behavior)
     if ctx["debug"]:
         print(ticket["comments"])
         print(json.dumps(ticket, indent=4, sort_keys=True))

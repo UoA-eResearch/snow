@@ -17,19 +17,23 @@ To show my groups work:
 Output of `./snow.py --help`
 
 ```
-Usage: snow.py [OPTIONS] COMMAND [ARGS]...
+Usage: snow [OPTIONS] COMMAND [ARGS]...
 
 Options:
   -d, --debug
-  -f, --format TEXT  Output format
+  -f, --format TEXT  Output format (text or json)
   --help             Show this message and exit.
 
 Commands:
   comment                    Add a comment
+  email_check                Check missing emails for the latest comment
   extract_yaml               Write original request to file
+  get_ticket_status          Get ticket status
+  get_user_comments          Get only msg from users, not automation
   my_groups_work             Show tickets in your groups
   my_work                    Show your tickets
   resolve                    Resolve a ticket
+  set_customer_promise       Set customer promise
   set_third_party_reference  Set third party reference
   show                       Show a ticket
   worknotes                  Add worknotes

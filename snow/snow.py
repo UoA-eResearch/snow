@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 
 import click
-from .util import login, list_tasks, show_ticket, patch, ticket_yaml, comments, ticket_properties, ticket as ticket_util
-from colorama import Fore, Back, Style # For terminal colours
-from pprint import pprint
+import json
+from .util import (
+    login, list_tasks, show_ticket, patch, ticket_yaml,
+    comments, ticket_properties, ticket as ticket_util
+)
+from colorama import Fore, Style  # For terminal colours
+
 
 class AliasedGroup(click.Group):
     def get_command(self, ctx, cmd_name):
@@ -19,7 +23,7 @@ class AliasedGroup(click.Group):
 
 @click.group(cls=AliasedGroup)
 @click.option('--debug', "-d", is_flag=True, default=False)
-@click.option('--format', "-f", default="table", help='Output format')
+@click.option('--format', "-f", default="text", help='Output format (text or json)')
 @click.pass_context
 def snow(ctx, debug, format):
     ctx.ensure_object(dict)
@@ -53,6 +57,7 @@ def my_groups_work(ctx, assigned, state, active, offboard):
 
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
 
+
 @snow.command(name="email_check")
 @click.option('--assigned', "-a", is_flag=True, show_default=True, default=True, help='Filter by assignment status')
 @click.option('--state', "-s", default="open", show_default=True, help='Filter by status')
@@ -60,6 +65,7 @@ def my_groups_work(ctx, assigned, state, active, offboard):
 @click.option('--offboard', "-o", is_flag=True, show_default=True, default=False, help='Include offboarding tickets')
 @click.pass_context
 def email_check(ctx, assigned, state, active, offboard):
+    """Check missing emails for the latest comment"""
     query = "assignment_group=javascript:getMyGroups()^sys_class_name!=u_security_vulnerabilities^ORDERBYnumber"
     if not assigned:
         query += "^assigned_toISEMPTY"
@@ -73,6 +79,8 @@ def email_check(ctx, assigned, state, active, offboard):
         query += "^u_third_party_referenceNOT LIKEOffboard^ORu_third_party_referenceISEMPTY"
 
     tickets = list_tasks.get_filtered_tasks(ctx.obj, query)
+
+    results = []
     for ticket in tickets:
         number = ticket["number"]["value"]
         if number.startswith("SCTASK"):
@@ -95,31 +103,71 @@ def email_check(ctx, assigned, state, active, offboard):
         comments = ticket_util.get_comments_for_ticket(ctx.obj, id)
         # Filter out comments by the requestor, and filter out work_notes
         comments = [c for c in comments if c["sys_created_by"]["value"] != requestor_upi and c["element"]["value"] == "comments"]
+
+        ticket_result = {
+            "ticket_number": number,
+            "has_comments": len(comments) > 0
+        }
+
         if not comments:
-            print(f"{number} has no comments")
+            ticket_result["status"] = "no_comments"
+            if ctx.obj["format"] == "text":
+                print(f"{number} has no comments")
+            results.append(ticket_result)
             continue
-        #pprint(comments)
+
         last_comment = comments[-1]
         last_comment_by = last_comment["sys_created_by"]["value"]
         last_comment_on = last_comment["sys_created_on"]["value"]
-        print(f"{number}: Latest comment at {last_comment_on} by {last_comment_by}")
+
+        ticket_result["last_comment"] = {
+            "by": last_comment_by,
+            "on": last_comment_on
+        }
+
+        if ctx.obj["format"] == "text":
+            print(f"{number}: Latest comment at {last_comment_on} by {last_comment_by}")
+
         emails = ticket_util.get_emails_for_ticket(ctx.obj, id)
         # Filter to just emails notifying the requestor
         emails = [e for e in emails if requestor_email in e["recipients"]["value"]]
+
         if not emails:
-            print(f"{Fore.RED}No emails to {requestor_email} on ticket {number}{Style.RESET_ALL}")
+            ticket_result["status"] = "no_emails"
+            ticket_result["requestor_email"] = requestor_email
+            if ctx.obj["format"] == "text":
+                print(f"{Fore.RED}No emails to {requestor_email} on ticket {number}{Style.RESET_ALL}")
         else:
             last_email = emails[-1]
             last_email_by = last_email["sys_created_by"]["value"]
             last_email_on = last_email["sys_created_on"]["value"]
             last_email_to = last_email["recipients"]["value"]
             subject = last_email["subject"]["value"]
-            print(f"Latest email at {last_email_on} to {last_email_to}: {subject}")
+
+            ticket_result["last_email"] = {
+                "by": last_email_by,
+                "on": last_email_on,
+                "to": last_email_to,
+                "subject": subject
+            }
+
+            if ctx.obj["format"] == "text":
+                print(f"Latest email at {last_email_on} to {last_email_to}: {subject}")
+
             if last_email_on < last_comment_on:
-    #            pprint(last_email)
-    #            pprint(last_comment)
-                print(f"{Fore.RED}No email notifying {requestor_email} sent for last comment on ticket {number} by {last_comment_by}{Style.RESET_ALL}")
-        print("-"*10)
+                ticket_result["status"] = "email_outdated"
+                ticket_result["requestor_email"] = requestor_email
+                if ctx.obj["format"] == "text":
+                    print(f"{Fore.RED}No email notifying {requestor_email} sent for last comment on ticket {number} by {last_comment_by}{Style.RESET_ALL}")
+            else:
+                ticket_result["status"] = "ok"
+
+        results.append(ticket_result)
+        if ctx.obj["format"] == "text":
+            print("-"*10)
+
+    if ctx.obj["format"] == "json":
+        print(json.dumps(results, indent=4))
 
 
 @snow.command(name="my_work")
@@ -157,7 +205,7 @@ def download_yaml(ctx, number):
 @click.argument('number')
 @click.pass_context
 def get_user_comments(ctx, number):
-    """Get only comments from users, excluding automation comments"""
+    """Get only msg from users, not automation"""
     comments.get_user_comments(ctx.obj, number)
 
 
@@ -166,7 +214,7 @@ def get_user_comments(ctx, number):
 @click.pass_context
 def get_ticket_status(ctx, number):
     """Get ticket status"""
-    ticket_properties.get(ctx, number, "state")
+    ticket_properties.get(ctx.obj, number, "state")
 
 
 @snow.command(name="comment")
