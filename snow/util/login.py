@@ -21,13 +21,6 @@ BASE_URL = "https://uoaprod.service-now.com/"
 INCORRECT_CREDENTIAL_STRING = "The combination of credentials you have entered is incorrect"
 INCORRECT_2FA_STRING = "The token you have entered is not correct"
 
-if os.getenv("SNOW_USERNAME") and os.getenv("SNOW_PWD"):
-    config = type("Config", (object,), {})
-    config.username = os.getenv("SNOW_USERNAME")
-    config.password = os.getenv("SNOW_PWD")
-else:
-    from .. import config
-
 
 class TLSAdapter(adapters.HTTPAdapter):
 
@@ -56,6 +49,12 @@ def login():
     r = s.get(BASE_URL)
 
     if "auth_redirect" in r.url:
+        if os.getenv("SNOW_USERNAME") and os.getenv("SNOW_PWD"):
+            config = type("Config", (object,), {})
+            config.username = os.getenv("SNOW_USERNAME")
+            config.password = os.getenv("SNOW_PWD")
+        else:
+            from .. import config
         # SSO redirection - login
         parsed_url = urlparse(r.url)
         params = parse_qs(parsed_url.query)
