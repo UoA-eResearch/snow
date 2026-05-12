@@ -11,7 +11,8 @@ setup(
         "tabulate",
         "python-editor",
         "click",
-        "html5lib"
+        "html5lib",
+        "colorama"
     ],
     entry_points='''
         [console_scripts]

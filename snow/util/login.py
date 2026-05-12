@@ -4,6 +4,7 @@ import pickle
 import re
 import ssl
 import sys
+import importlib
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -54,7 +55,19 @@ def login():
             config.username = os.getenv("SNOW_USERNAME")
             config.password = os.getenv("SNOW_PWD")
         else:
-            from .. import config
+            try:
+                from .. import config
+            except ImportError:
+                # Support running from a source checkout where config.py may be
+                # at repository root rather than inside the package.
+                try:
+                    config = importlib.import_module("config")
+                except ImportError as exc:
+                    raise ImportError(
+                        "Snow configuration not found. Set SNOW_USERNAME and "
+                        "SNOW_PWD env vars, or create snow/config.py "
+                        "(or repo-root config.py) with username/password."
+                    ) from exc
         # SSO redirection - login
         parsed_url = urlparse(r.url)
         params = parse_qs(parsed_url.query)
