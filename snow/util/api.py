@@ -6,7 +6,9 @@ class Snow:
         self.ctx = {
             "BASE_URL": login.BASE_URL,
             "s": login.login(),
-            "api": True
+            "api": True,
+            "format": "text",
+            "debug": False,
         }
 
     def get_user_comments(self, ticket_number):
