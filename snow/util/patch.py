@@ -1,23 +1,52 @@
 import sys
-import json
 import editor
+
+from .output import fail, emit_json, EXIT_ERROR
+
+
+def read_message(ctx, message=None):
+    """Work out the text to write.
+
+    Order: explicit ``message`` (``--message``), then piped stdin, then
+    $EDITOR when a human is at a terminal. In non-interactive mode the
+    editor is never opened.
+    """
+    if message:
+        return message
+    if message is not None:
+        # Explicit empty --message "" : do not fall back to stdin/editor.
+        return ""
+    if not sys.stdin.isatty():
+        return sys.stdin.read()
+    if ctx.get("non_interactive"):
+        return ""
+    message = editor.edit()
+    if isinstance(message, bytes):
+        message = message.decode("utf-8")
+    return message
 
 
 def patch(ctx, number, field, message=None):
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]
-    if not message:
-        if sys.stdin.isatty():
-            message = editor.edit()
-        else:
-            message = sys.stdin.read()
-    if not message:
+    if ctx.get("api"):
+        # Library mode (util/api.py): historical behaviour, no --message.
+        if not message:
+            if sys.stdin.isatty():
+                message = editor.edit()
+            else:
+                message = sys.stdin.read()
+    else:
+        message = read_message(ctx, message)
+    if isinstance(message, bytes):
+        message = message.decode("utf-8")
+    if not message or not message.strip():
         msg = "Aborted - no message"
-        if ctx["format"] == "json":
-            print(json.dumps({"error": msg}))
-        else:
+        if ctx.get("api"):
             print(msg)
-        return
+            return
+        return fail(ctx, "no_message", msg, EXIT_ERROR,
+                    extra={"ok": False, "ticket_number": number, "field": field})
     query = "number=" + number
     url = BASE_URL + "/api/now/table/task"
     # No sysparm_display_value here: sys_class_name must come back as the raw
@@ -31,18 +60,18 @@ def patch(ctx, number, field, message=None):
     r = r.json()
     if 'error' in r:
         error_msg = r["error"]["message"]
-        if ctx["format"] == "json":
-            print(json.dumps({"error": error_msg}))
-        else:
+        if ctx.get("api"):
             print(error_msg)
-        return
+            return
+        return fail(ctx, "api_error", error_msg, EXIT_ERROR,
+                    extra={"ok": False, "ticket_number": number, "field": field})
     if not r['result']:
         msg = "Ticket not found"
-        if ctx["format"] == "json":
-            print(json.dumps({"error": msg}))
-        else:
+        if ctx.get("api"):
             print(msg)
-        return
+            return
+        return fail(ctx, "ticket_not_found", msg, EXIT_ERROR,
+                    extra={"ok": False, "ticket_number": number, "field": field})
     ticket = r['result'][0]
 
     sys_id = ticket["sys_id"]
@@ -85,23 +114,38 @@ def patch(ctx, number, field, message=None):
     url = BASE_URL + "/api/now/table/" + table + "/" + sys_id
     r = s.patch(url, json=data, headers={"X-no-response-body": "true"})
 
-    if ctx["format"] == "json":
-        if r.status_code == 204:
-            output = {
-                "ticket_number": number,
-                "field": field,
-                "status": "success"
-            }
-        else:
-            output = {
-                "ticket_number": number,
-                "field": field,
-                "status": "error",
-                "error": r.json()["error"]
-            }
-        print(json.dumps(output, indent=4))
-    else:
-        if r.status_code == 204:
+    if r.status_code == 204:
+        if ctx.get("api") or ctx["format"] != "json":
             print("Success")
         else:
-            print(r.json()["error"])
+            emit_json({
+                "ok": True,
+                "ticket_number": number,
+                "field": field,
+                "table": table,
+                "status": "success",
+            })
+        return True
+
+    try:
+        sn_error = r.json()["error"]
+    except Exception:
+        sn_error = {"message": "HTTP %d" % r.status_code, "detail": r.text[:500]}
+    if ctx.get("api"):
+        print(sn_error)
+        return False
+    if ctx["format"] != "json":
+        # Historical text output: the ServiceNow error object.
+        print(sn_error)
+        sys.exit(EXIT_ERROR)
+    message = sn_error.get("message") if isinstance(sn_error, dict) else str(sn_error)
+    return fail(ctx, "update_failed", message or "HTTP %d" % r.status_code, EXIT_ERROR,
+                extra={
+                    "ok": False,
+                    "ticket_number": number,
+                    "field": field,
+                    "table": table,
+                    "status": "error",
+                    "http_status": r.status_code,
+                    "detail": sn_error,
+                })

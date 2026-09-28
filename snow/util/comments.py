@@ -1,13 +1,12 @@
 import re
-import json
+from .output import emit_json
 from .ticket import get_ticket
 
 
 def get_user_comments(ctx, ticket_number):
     ticket = get_ticket(ctx, ticket_number)
     if not ticket:
-        if ctx["format"] == "json":
-            print(json.dumps({"error": "Ticket not found"}))
+        # Only reachable in library mode; the CLI exits inside get_ticket.
         return []
 
     comments = ticket['comments']
@@ -37,6 +36,6 @@ def get_user_comments(ctx, ticket_number):
 
     # Print JSON output at the end if in JSON mode
     if not ctx["api"] and ctx["format"] == "json":
-        print(json.dumps(response, indent=4))
+        emit_json(response)
 
     return response

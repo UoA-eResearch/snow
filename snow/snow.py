@@ -1,12 +1,37 @@
 #!/usr/bin/env python3
 
+import os
+import sys
+
 import click
-import json
+import requests
 from .util import (
     login, list_tasks, show_ticket, patch, ticket_yaml,
     comments, ticket_properties, ticket as ticket_util
 )
+from .util.output import (
+    CommandFailed, report_failure, emit_json, error_document, diag,
+    EXIT_ERROR, EXIT_USAGE, EXIT_LOGIN_REQUIRED,
+)
 from colorama import Fore, Style  # For terminal colours
+
+
+def _env_flag(name):
+    return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+class SnowContext(dict):
+    """ctx.obj for the CLI. Logs in lazily, the first time a command needs
+    the HTTP session (ctx.obj["s"]), so `snow <command> --help` works
+    without touching the network."""
+
+    def __missing__(self, key):
+        if key != "s":
+            raise KeyError(key)
+        s = login.login(interactive=not self["non_interactive"])
+        s.hooks.setdefault("response", []).append(login.raise_on_unauthenticated)
+        self["s"] = s
+        return s
 
 
 class AliasedGroup(click.Group):
@@ -20,19 +45,77 @@ class AliasedGroup(click.Group):
                 return click.Group.get_command(self, ctx, x)
         return None
 
+    def invoke(self, ctx):
+        # Turn every failure inside a command into the documented contract:
+        # one JSON document on stdout in json mode, diagnostics on stderr,
+        # and a distinct exit code.
+        try:
+            return super().invoke(ctx)
+        except CommandFailed as e:
+            report_failure(ctx.obj, e)
+            ctx.exit(e.exit_code)
+        except login.LoginRequired as e:
+            if _json_mode(ctx):
+                emit_json(error_document("login_required", e.message,
+                                         {"reason": e.reason}))
+            else:
+                diag(e.message)
+            ctx.exit(EXIT_LOGIN_REQUIRED)
+        except click.UsageError as e:
+            if not _json_mode(ctx):
+                raise
+            e.show()  # usual usage message on stderr
+            emit_json(error_document("usage_error", e.format_message()))
+            ctx.exit(EXIT_USAGE)
+        except (click.exceptions.Exit, click.exceptions.Abort, click.ClickException):
+            raise
+        except requests.RequestException as e:
+            if not _json_mode(ctx):
+                raise
+            diag("Network error: %s" % e)
+            emit_json(error_document("network_error", str(e)))
+            ctx.exit(EXIT_ERROR)
+        except Exception as e:
+            if not _json_mode(ctx):
+                raise
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            emit_json(error_document("unexpected_error",
+                                     "%s: %s" % (type(e).__name__, e)))
+            ctx.exit(EXIT_ERROR)
+
+
+def _json_mode(ctx):
+    return isinstance(ctx.obj, dict) and ctx.obj.get("format") == "json"
+
 
 @click.group(cls=AliasedGroup)
 @click.option('--debug', "-d", is_flag=True, default=False)
 @click.option('--format', "-f", default="text", help='Output format (text or json)')
+@click.option('--non-interactive', "non_interactive", is_flag=True, default=False,
+              help='Never prompt (2FA token, $EDITOR). Exit 3 if a login is '
+                   'required. Implied when stdin is not a TTY or '
+                   'SNOW_NON_INTERACTIVE=1.')
 @click.pass_context
-def snow(ctx, debug, format):
-    ctx.ensure_object(dict)
-    ctx.obj["BASE_URL"] = login.BASE_URL
-    ctx.obj["s"] = login.login()
-    ctx.obj["debug"] = debug
-    ctx.obj["format"] = format
-    ctx.obj["api"] = False
-    pass
+def snow(ctx, debug, format, non_interactive):
+    non_interactive = (
+        non_interactive
+        or _env_flag("SNOW_NON_INTERACTIVE")
+        or not sys.stdin.isatty()
+    )
+    ctx.obj = SnowContext(
+        BASE_URL=login.BASE_URL,
+        debug=debug,
+        format=format,
+        api=False,
+        non_interactive=non_interactive,
+    )
+
+
+message_option = click.option(
+    '--message', '-m', default=None,
+    help='Text to write. If omitted, read from stdin when piped, otherwise '
+         'open $EDITOR (never in non-interactive mode).')
 
 
 @snow.command(name="my_groups_work")
@@ -79,6 +162,8 @@ def email_check(ctx, assigned, state, active, offboard):
         query += "^u_third_party_referenceNOT LIKEOffboard^ORu_third_party_referenceISEMPTY"
 
     tickets = list_tasks.get_filtered_tasks(ctx.obj, query)
+    if tickets is None:
+        return
 
     results = []
     for ticket in tickets:
@@ -167,7 +252,7 @@ def email_check(ctx, assigned, state, active, offboard):
             print("-"*10)
 
     if ctx.obj["format"] == "json":
-        print(json.dumps(results, indent=4))
+        emit_json(results)
 
 
 @snow.command(name="my_work")
@@ -219,42 +304,47 @@ def get_ticket_status(ctx, number):
 
 @snow.command(name="comment")
 @click.argument('number')
+@message_option
 @click.pass_context
-def comment(ctx, number):
+def comment(ctx, number, message):
     """Add a comment"""
-    patch.patch(ctx.obj, number, "comments")
+    patch.patch(ctx.obj, number, "comments", message)
 
 
 @snow.command(name="worknotes")
 @click.argument("number")
+@message_option
 @click.pass_context
-def worknotes(ctx, number):
+def worknotes(ctx, number, message):
     """Add worknotes"""
-    patch.patch(ctx.obj, number, "work_notes")
+    patch.patch(ctx.obj, number, "work_notes", message)
 
 
 @snow.command(name="resolve")
 @click.argument("number")
+@message_option
 @click.pass_context
-def resolve(ctx, number):
+def resolve(ctx, number, message):
     """Resolve a ticket"""
-    patch.patch(ctx.obj, number, "resolve")
+    patch.patch(ctx.obj, number, "resolve", message)
 
 
 @snow.command(name="set_third_party_reference")
 @click.argument("number")
+@message_option
 @click.pass_context
-def set_third_party_reference(ctx, number):
+def set_third_party_reference(ctx, number, message):
     """Set third party reference"""
-    patch.patch(ctx.obj, number, "u_third_party_reference")
+    patch.patch(ctx.obj, number, "u_third_party_reference", message)
 
 
 @snow.command(name="set_customer_promise")
 @click.argument("number")
+@message_option
 @click.pass_context
-def set_customer_promise(ctx, number):
+def set_customer_promise(ctx, number, message):
     """Set customer promise"""
-    patch.patch(ctx.obj, number, "u_customer_promise")
+    patch.patch(ctx.obj, number, "u_customer_promise", message)
 
 
 if __name__ == '__main__':

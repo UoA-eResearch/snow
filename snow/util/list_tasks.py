@@ -1,5 +1,5 @@
 from tabulate import tabulate
-import json
+from .output import fail, emit_json
 
 FIELDS_TO_DISPLAY = ["number", "opened_at", "short_description", "state", "priority", "assigned_to", "assignment_group", "u_requestor"]
 
@@ -18,8 +18,7 @@ def get_filtered_tasks(ctx, query):
     r = s.get(url, params=params)
     r = r.json()
     if 'error' in r:
-        print(r["error"]["message"])
-        return
+        return fail(ctx, "api_error", r["error"]["message"])
     return r["result"]
 
 def get_and_print_filtered_tasks(ctx, query):
@@ -37,12 +36,11 @@ def get_and_print_filtered_tasks(ctx, query):
     r = s.get(url, params=params)
     r = r.json()
     if 'error' in r:
-        print(r["error"]["message"])
-        return
+        return fail(ctx, "api_error", r["error"]["message"])
     results = r['result']
 
     if ctx["format"] == "json":
-        print(json.dumps(results, indent=4, sort_keys=True))
+        emit_json(results, sort_keys=True)
         return
 
     filtered_results = []

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-import json
+from .output import fail, emit_json
 import re
 OUTPUT_FILE = 'orig_request.yaml'
 
@@ -17,29 +17,15 @@ def extract(ctx, args):
     r = s.get(url, params=params)
     r = r.json()
     if 'error' in r:
-        error_msg = r["error"]["message"]
-        if ctx["format"] == "json":
-            print(json.dumps({"error": error_msg}))
-        else:
-            print(error_msg)
-        return
+        return fail(ctx, "api_error", r["error"]["message"])
     if not r['result']:
-        msg = "Ticket not found"
-        if ctx["format"] == "json":
-            print(json.dumps({"error": msg}))
-        else:
-            print(msg)
-        return
+        return fail(ctx, "ticket_not_found", "Ticket not found")
     ticket = r['result'][0]
     p = re.compile(r'^General$', re.M)
     search_result = re.search(p, ticket['comments'])
     if not search_result:
-        msg = "Could not find 'General' section in comments"
-        if ctx["format"] == "json":
-            print(json.dumps({"error": msg}))
-        else:
-            print(msg)
-        return
+        return fail(ctx, "general_section_not_found",
+                    "Could not find 'General' section in comments")
 
     ticket_start_position = search_result.start()
     yaml_content = ticket['comments'][ticket_start_position:]
@@ -55,7 +41,7 @@ def extract(ctx, args):
             "file": OUTPUT_FILE,
             "content": yaml_content
         }
-        print(json.dumps(output, indent=4))
+        emit_json(output)
     else:
         with open(OUTPUT_FILE, 'r') as orig_request:
             print(orig_request.read())

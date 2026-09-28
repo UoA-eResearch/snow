@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 import json
+from .output import fail, emit_json
 
 fields = [
     ("Ticket details", [
@@ -57,26 +58,16 @@ def get_and_print_ticket(ctx, args):
     r = s.get(url, params=params)
     r = r.json()
     if 'error' in r:
-        error_msg = r["error"]["message"]
-        if ctx["format"] == "json":
-            print(json.dumps({"error": error_msg}))
-        else:
-            print(error_msg)
-        return
+        return fail(ctx, "api_error", r["error"]["message"])
     if not r['result']:
-        msg = "Ticket not found"
-        if ctx["format"] == "json":
-            print(json.dumps({"error": msg}))
-        else:
-            print(msg)
-        return
+        return fail(ctx, "ticket_not_found", "Ticket not found")
     ticket = r['result'][0]
 
     if ctx["format"] == "json":
         # For JSON output, get user info and merge it with ticket
         user = s.get(ticket['u_requestor']['link']).json()["result"]
         output = {"ticket": ticket, "user": user}
-        print(json.dumps(output, indent=4, sort_keys=True))
+        emit_json(output, sort_keys=True)
         return
 
     # Text output (original behavior)
