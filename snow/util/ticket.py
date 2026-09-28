@@ -1,4 +1,11 @@
-def get_ticket(ctx, ticket_number):
+from .output import fail, EXIT_ERROR
+
+
+def find_ticket(ctx, ticket_number, params_extra=None):
+    """Look a ticket up by number.
+
+    :return: (ticket, None) on success, or (None, (error_code, message))
+    """
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]
     query = "number=" + ticket_number
@@ -7,16 +14,27 @@ def get_ticket(ctx, ticket_number):
         "sysparm_query": query,
         "sysparm_display_value": "true",
     }
+    if params_extra:
+        params.update(params_extra)
     r = s.get(url, params=params)
     r = r.json()
     if 'error' in r:
-        print(r["error"]["message"])
-        return
+        return None, ("api_error", r["error"]["message"])
     if not r['result']:
-        print("Ticket not found")
-        return
-    ticket = r['result'][0]
+        return None, ("ticket_not_found", "Ticket not found")
+    return r['result'][0], None
+
+
+def get_ticket(ctx, ticket_number):
+    ticket, err = find_ticket(ctx, ticket_number)
+    if err:
+        if ctx.get("api"):
+            # Library mode (util/api.py): historical behaviour.
+            print(err[1])
+            return None
+        fail(ctx, err[0], err[1], EXIT_ERROR)
     return ticket
+
 
 def get_comments_for_ticket(ctx, sys_id):
     '''

@@ -1,12 +1,12 @@
 import json
+from .output import emit_json
 from .ticket import get_ticket
 
 
 def get(ctx, ticket_number, property):
     ticket = get_ticket(ctx, ticket_number)
     if not ticket:
-        if ctx["format"] == "json":
-            print(json.dumps({"error": "Ticket not found"}))
+        # Only reachable in library mode; the CLI exits inside get_ticket.
         return None
 
     ticket_property = ticket[property]
@@ -17,7 +17,7 @@ def get(ctx, ticket_number, property):
                 "property": property,
                 "value": ticket_property
             }
-            print(json.dumps(output, indent=4))
+            emit_json(output)
         else:
             print(ticket_property)
     return ticket_property
