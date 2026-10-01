@@ -7,7 +7,7 @@ import click
 import requests
 from .util import (
     login, list_tasks, show_ticket, patch, ticket_yaml,
-    comments, ticket_properties, ticket as ticket_util
+    comments, ticket_properties, ticket as ticket_util, assign
 )
 from .util.output import (
     CommandFailed, report_failure, emit_json, error_document, diag,
@@ -118,14 +118,7 @@ message_option = click.option(
          'open $EDITOR (never in non-interactive mode).')
 
 
-@snow.command(name="my_groups_work")
-@click.option('--assigned', "-a", is_flag=True, show_default=True, default=False, help='Filter by assignment status')
-@click.option('--state', "-s", default="open", show_default=True, help='Filter by status')
-@click.option('--active', "-l", is_flag=True, show_default=True, default=True, help='Filter by active status')
-@click.option('--offboard', "-o", is_flag=True, show_default=True, default=False, help='Include offboarding tickets')
-@click.pass_context
-def my_groups_work(ctx, assigned, state, active, offboard):
-    """Show tickets in your groups"""
+def my_groups_work_query(assigned, state, active, offboard):
     query = "assignment_group=javascript:getMyGroups()^sys_class_name!=u_security_vulnerabilities^ORDERBYnumber"
     if not assigned:
         query += "^assigned_toISEMPTY"
@@ -137,7 +130,27 @@ def my_groups_work(ctx, assigned, state, active, offboard):
         query += "^stateIN-16,6,-2,3"
     if not offboard:
         query += "^u_third_party_referenceNOT LIKEOffboard^ORu_third_party_referenceISEMPTY"
+    return query
 
+
+def my_work_query(state):
+    query = "active=true^assigned_to=javascript:getMyAssignments()^ORDERBYnumber"
+    if state in ["open", "unresolved", "unsolved"]:
+        query += "^stateNOT IN-16,6,-2,-3"
+    elif state in ["closed", "resolved", "solved"]:
+        query += "^stateIN-16,6,-2,3"
+    return query
+
+
+@snow.command(name="my_groups_work")
+@click.option('--assigned', "-a", is_flag=True, show_default=True, default=False, help='Filter by assignment status')
+@click.option('--state', "-s", default="open", show_default=True, help='Filter by status')
+@click.option('--active', "-l", is_flag=True, show_default=True, default=True, help='Filter by active status')
+@click.option('--offboard', "-o", is_flag=True, show_default=True, default=False, help='Include offboarding tickets')
+@click.pass_context
+def my_groups_work(ctx, assigned, state, active, offboard):
+    """Show tickets in your groups"""
+    query = my_groups_work_query(assigned, state, active, offboard)
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
 
 
@@ -260,13 +273,7 @@ def email_check(ctx, assigned, state, active, offboard):
 @click.pass_context
 def mw(ctx, state):
     """Show your tickets"""
-    query = "active=true^assigned_to=javascript:getMyAssignments()^ORDERBYnumber"
-
-    if state in ["open", "unresolved", "unsolved"]:
-        query += "^stateNOT IN-16,6,-2,-3"
-    elif state in ["closed", "resolved", "solved"]:
-        query += "^stateIN-16,6,-2,3"
-
+    query = my_work_query(state)
     list_tasks.get_and_print_filtered_tasks(ctx.obj, query)
 
 
@@ -345,6 +352,38 @@ def set_third_party_reference(ctx, number, message):
 def set_customer_promise(ctx, number, message):
     """Set customer promise"""
     patch.patch(ctx.obj, number, "u_customer_promise", message)
+
+
+@snow.command(name="queue")
+@click.pass_context
+def queue(ctx):
+    """Your triage queue: unassigned group tickets + yours"""
+    list_tasks.get_and_print_queue(ctx.obj, [
+        ("unassigned", my_groups_work_query(assigned=False, state="open",
+                                            active=True, offboard=False)),
+        ("mine", my_work_query(state="open")),
+    ])
+
+
+@snow.command(name="assign_to_me")
+@click.argument("number")
+@click.option("--if-unassigned", "if_unassigned", is_flag=True, default=False,
+              help="Only assign if nobody has the ticket; fail with "
+                   "already_assigned if someone else does.")
+@click.pass_context
+def assign_to_me(ctx, number, if_unassigned):
+    """Assign a ticket to yourself"""
+    assign.assign_to_me(ctx.obj, number, if_unassigned)
+
+
+@snow.command(name="add_to_watchlist")
+@click.argument("number")
+@click.option("--user", "-u", required=True,
+              help="UPI/username or email address of the user to add")
+@click.pass_context
+def add_to_watchlist(ctx, number, user):
+    """Add a user to a ticket's watch list"""
+    assign.add_to_watchlist(ctx.obj, number, user)
 
 
 if __name__ == '__main__':
