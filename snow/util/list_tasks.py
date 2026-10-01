@@ -7,7 +7,7 @@ def get_filtered_tasks(ctx, query):
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]
     url = BASE_URL + "/api/now/table/task"
-    fields = FIELDS_TO_DISPLAY
+    fields = list(FIELDS_TO_DISPLAY)  # copy: never grow the module-level list
     if ctx["format"] == "json":
         fields.extend(["cmdb_ci", "u_business_service", "subcategory", "u_resolved", "closed_at", "business_duration", "sys_created_on", "sys_updated_on"])
     params = {
@@ -25,7 +25,7 @@ def get_and_print_filtered_tasks(ctx, query):
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]
     url = BASE_URL + "/api/now/table/task"
-    fields = FIELDS_TO_DISPLAY
+    fields = list(FIELDS_TO_DISPLAY)  # copy: never grow the module-level list
     if ctx["format"] == "json":
         fields.extend(["cmdb_ci", "u_business_service", "subcategory", "u_resolved", "closed_at", "business_duration", "sys_created_on", "sys_updated_on"])
     params = {
@@ -53,3 +53,57 @@ def get_and_print_filtered_tasks(ctx, query):
             filtered_result.append(value)
         filtered_results.append(filtered_result)
     print(tabulate(filtered_results, headers=FIELDS_TO_DISPLAY))
+
+
+QUEUE_FIELDS = ["number", "short_description", "state", "priority", "opened_at",
+                "sys_updated_on", "assigned_to", "assignment_group", "sys_class_name",
+                "sys_id"]
+# Raw values instead of display labels: sys_class_name is the table name
+# ("sc_task", not "Catalog Task") and sys_id has no display form.
+QUEUE_RAW_FIELDS = ("sys_class_name", "sys_id")
+QUEUE_TEXT_COLUMNS = ["queue", "number", "opened_at", "short_description", "state",
+                      "priority", "assigned_to", "assignment_group"]
+
+
+def _queue_item(record, queue):
+    item = {}
+    for key in QUEUE_FIELDS:
+        value = record.get(key)
+        if isinstance(value, dict):
+            value = value.get("value" if key in QUEUE_RAW_FIELDS else "display_value")
+        item[key] = value if value != "" else None
+    item["queue"] = queue
+    return item
+
+
+def get_and_print_queue(ctx, sources):
+    """Print the triage queue.
+
+    :param sources: list of (queue_name, encoded_query); results are listed
+        in that order, each ticket once.
+    """
+    url = ctx["BASE_URL"] + "/api/now/table/task"
+    items, seen = [], set()
+    for queue, query in sources:
+        params = {
+            "sysparm_query": query,
+            "sysparm_display_value": "all",
+            "sysparm_fields": ",".join(QUEUE_FIELDS),
+        }
+        r = ctx["s"].get(url, params=params).json()
+        if 'error' in r:
+            return fail(ctx, "api_error", r["error"]["message"])
+        for record in r["result"]:
+            item = _queue_item(record, queue)
+            if item["sys_id"] in seen:
+                continue
+            seen.add(item["sys_id"])
+            items.append(item)
+
+    if ctx["format"] == "json":
+        emit_json(items, sort_keys=True)
+        return items
+
+    rows = [[item[k] for k in QUEUE_TEXT_COLUMNS] for item in items]
+    print(tabulate(rows, headers=QUEUE_TEXT_COLUMNS))
+    return items

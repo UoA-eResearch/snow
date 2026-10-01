@@ -335,3 +335,258 @@ def test_usage_error_json(monkeypatch):
     r = runner().invoke(cli.snow, ["-f", "json", "show"])
     assert r.exit_code == 2
     assert json.loads(r.stdout)["error"] == "usage_error"
+
+
+# --- assign_to_me / add_to_watchlist / queue -----------------------------
+
+ME = {"sys_id": "me1", "user_name": "jdoe001", "name": "Jane Doe", "email": "j.doe@example.org"}
+
+
+def ref(value, display):
+    return {"value": value, "display_value": display}
+
+
+def ticket_record(assigned_to=None, watch_list="", table="incident"):
+    return {
+        "sys_id": ref("abc", "abc"),
+        "sys_class_name": ref(table, table.title()),
+        "assigned_to": assigned_to or ref("", ""),
+        "watch_list": ref(watch_list, watch_list),
+    }
+
+
+def assign_session(record, patch_status=204, user_result=None):
+    return logged_in_session([
+        ("GET", "/api/now/table/sys_user", FakeResponse(payload={
+            "result": [ME] if user_result is None else user_result})),
+        ("GET", "/api/now/table/task", FakeResponse(payload={
+            "result": [record] if record else []})),
+        ("PATCH", "/api/now/table/", FakeResponse(
+            status_code=patch_status,
+            payload=None if patch_status == 204 else {"error": {"message": "ACL Exception"}})),
+    ])
+
+
+def api_calls(sess):
+    return [(m, u, kw) for m, u, kw in sess.calls if "/api/now/" in u]
+
+
+@pytest.mark.parametrize("flag", [[], ["--if-unassigned"]])
+def test_assign_to_me_unassigned_json(monkeypatch, flag):
+    sess = assign_session(ticket_record())
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "assign_to_me", "INC1"] + flag)
+    assert r.exit_code == 0, r.stdout + r.stderr
+    assert json.loads(r.stdout) == {
+        "ok": True, "ticket_number": "INC1", "assigned_to": "Jane Doe", "already_mine": False}
+    assert "Navigated to" in r.stderr and "Navigated to" not in r.stdout
+    calls = api_calls(sess)
+    # who am I, then the ticket read immediately followed by the PATCH
+    assert [m for m, _, _ in calls] == ["GET", "GET", "PATCH"]
+    assert "/sys_user" in calls[0][1]
+    assert "/table/task" in calls[1][1]
+    assert "assigned_to" in calls[1][2]["params"]["sysparm_fields"]
+    assert calls[2][1].endswith("/api/now/table/incident/abc")
+    assert calls[2][2]["json"] == {"assigned_to": "me1"}
+
+
+def test_assign_to_me_if_unassigned_race_lost(monkeypatch):
+    sess = assign_session(ticket_record(assigned_to=ref("other9", "Bob Smith")))
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "assign_to_me", "INC1", "--if-unassigned"])
+    assert r.exit_code == 1
+    doc = json.loads(r.stdout)
+    assert doc["error"] == "already_assigned"
+    assert doc["assigned_to"] == "Bob Smith"
+    assert doc["ok"] is False and doc["ticket_number"] == "INC1"
+    assert doc["message"]
+    assert not [c for c in sess.calls if c[0] == "PATCH"]
+
+
+def test_assign_to_me_without_flag_takes_over(monkeypatch):
+    sess = assign_session(ticket_record(assigned_to=ref("other9", "Bob Smith")))
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "assign_to_me", "INC1"])
+    assert r.exit_code == 0
+    assert json.loads(r.stdout)["already_mine"] is False
+    assert sess.calls[-1][2]["json"] == {"assigned_to": "me1"}
+
+
+@pytest.mark.parametrize("flag", [[], ["--if-unassigned"]])
+def test_assign_to_me_already_mine(monkeypatch, flag):
+    sess = assign_session(ticket_record(assigned_to=ref("me1", "Jane Doe")))
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "assign_to_me", "INC1"] + flag)
+    assert r.exit_code == 0
+    assert json.loads(r.stdout) == {
+        "ok": True, "ticket_number": "INC1", "assigned_to": "Jane Doe", "already_mine": True}
+    assert not [c for c in sess.calls if c[0] == "PATCH"]
+
+
+def test_assign_to_me_text(monkeypatch):
+    use_session(monkeypatch, assign_session(ticket_record(table="sc_task")))
+    r = runner().invoke(cli.snow, ["assign_to_me", "SCTASK1"])
+    assert r.exit_code == 0
+    assert r.stdout.strip() == "Assigned SCTASK1 to Jane Doe"
+    assert "Navigated to" in r.stderr
+
+
+def test_assign_to_me_text_race_lost(monkeypatch):
+    use_session(monkeypatch, assign_session(ticket_record(assigned_to=ref("o", "Bob Smith"))))
+    r = runner().invoke(cli.snow, ["assign_to_me", "INC1", "--if-unassigned"])
+    assert r.exit_code == 1
+    assert "already assigned to Bob Smith" in r.stdout
+
+
+def test_assign_to_me_not_found_and_rejected(monkeypatch):
+    use_session(monkeypatch, assign_session(None))
+    r = runner().invoke(cli.snow, ["-f", "json", "assign_to_me", "INC404"])
+    assert r.exit_code == 1
+    assert json.loads(r.stdout)["error"] == "ticket_not_found"
+
+    use_session(monkeypatch, assign_session(ticket_record(), patch_status=403))
+    r = runner().invoke(cli.snow, ["-f", "json", "assign_to_me", "INC1"])
+    assert r.exit_code == 1
+    doc = json.loads(r.stdout)
+    assert doc["error"] == "update_failed" and doc["http_status"] == 403
+    assert doc["table"] == "incident"
+
+
+def test_add_to_watchlist_appends(monkeypatch):
+    sess = assign_session(ticket_record(watch_list="w1,w2"))
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "INC1", "--user", "jdoe001"])
+    assert r.exit_code == 0, r.stdout + r.stderr
+    assert json.loads(r.stdout) == {
+        "ok": True, "ticket_number": "INC1", "user": "jdoe001",
+        "user_sys_id": "me1", "already_watching": False}
+    calls = api_calls(sess)
+    assert calls[0][2]["params"]["sysparm_query"] == "user_name=jdoe001"
+    assert calls[-1][0] == "PATCH"
+    assert calls[-1][1].endswith("/api/now/table/incident/abc")
+    assert calls[-1][2]["json"] == {"watch_list": "w1,w2,me1"}
+
+
+def test_add_to_watchlist_by_email_empty_list(monkeypatch):
+    sess = assign_session(ticket_record(watch_list=""))
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "INC1",
+                                   "--user", "j.doe@example.org"])
+    assert r.exit_code == 0
+    assert api_calls(sess)[0][2]["params"]["sysparm_query"] == "email=j.doe@example.org"
+    assert sess.calls[-1][2]["json"] == {"watch_list": "me1"}
+
+
+def test_add_to_watchlist_idempotent(monkeypatch):
+    sess = assign_session(ticket_record(watch_list="w1,me1"))
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "INC1", "-u", "jdoe001"])
+    assert r.exit_code == 0
+    assert json.loads(r.stdout)["already_watching"] is True
+    assert not [c for c in sess.calls if c[0] == "PATCH"]
+
+    r = runner().invoke(cli.snow, ["add_to_watchlist", "INC1", "-u", "jdoe001"])
+    assert r.exit_code == 0
+    assert r.stdout.strip() == "jdoe001 is already watching INC1"
+
+
+@pytest.mark.parametrize("user", ["nobody", "a^ORuser_nameSTARTSWITHa"])
+def test_add_to_watchlist_user_not_found(monkeypatch, user):
+    sess = assign_session(ticket_record(), user_result=[])
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "INC1", "-u", user])
+    assert r.exit_code == 1
+    doc = json.loads(r.stdout)
+    assert doc["error"] == "user_not_found" and doc["user"] == user and doc["message"]
+    assert not [c for c in sess.calls if c[0] == "PATCH"]
+
+
+def test_add_to_watchlist_text(monkeypatch):
+    use_session(monkeypatch, assign_session(ticket_record()))
+    r = runner().invoke(cli.snow, ["add_to_watchlist", "INC1", "-u", "jdoe001"])
+    assert r.exit_code == 0
+    assert r.stdout.strip() == "Added jdoe001 to the watch list of INC1"
+
+
+def test_add_to_watchlist_requires_user(monkeypatch):
+    r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "INC1"])
+    assert r.exit_code == 2
+    assert json.loads(r.stdout)["error"] == "usage_error"
+
+
+def queue_record(number, sys_id, assigned_to):
+    return {
+        "number": ref(number, number),
+        "short_description": ref("desc", "desc"),
+        "state": ref("1", "New"),
+        "priority": ref("4", "4 - Low"),
+        "opened_at": ref("2026-09-01 00:00:00", "01/09/2026 12:00:00"),
+        "sys_updated_on": ref("2026-09-02 00:00:00", "02/09/2026 12:00:00"),
+        "assigned_to": assigned_to or ref("", ""),
+        "assignment_group": ref("g1", "CeR"),
+        "sys_class_name": ref("sc_task", "Catalog Task"),
+        "sys_id": ref(sys_id, sys_id),
+    }
+
+
+def queue_session():
+    def tasks(url, kw):
+        q = kw["params"]["sysparm_query"]
+        if "getMyGroups()" in q:
+            assert "assigned_toISEMPTY" in q and "active=true" in q
+            result = [queue_record("SCTASK2", "s2", None)]
+        else:
+            assert "assigned_to=javascript:getMyAssignments()" in q
+            result = [queue_record("INC1", "s1", ref("me1", "Jane Doe"))]
+        return FakeResponse(payload={"result": result})
+    return logged_in_session([("GET", "/api/now/table/task", tasks)])
+
+
+def test_queue_json(monkeypatch):
+    use_session(monkeypatch, queue_session())
+    r = runner().invoke(cli.snow, ["-f", "json", "queue"])
+    assert r.exit_code == 0, r.stdout + r.stderr
+    items = json.loads(r.stdout)
+    assert [(i["number"], i["queue"]) for i in items] == [("SCTASK2", "unassigned"), ("INC1", "mine")]
+    assert items[0]["assigned_to"] is None
+    assert items[1]["assigned_to"] == "Jane Doe"
+    assert items[0]["sys_class_name"] == "sc_task"
+    assert items[0]["sys_updated_on"] == "02/09/2026 12:00:00"
+    for key in ["number", "short_description", "state", "priority", "opened_at",
+                "sys_updated_on", "assigned_to", "assignment_group", "sys_class_name",
+                "sys_id", "queue"]:
+        assert key in items[0]
+    assert "Navigated to" in r.stderr
+
+
+def test_queue_text(monkeypatch):
+    use_session(monkeypatch, queue_session())
+    r = runner().invoke(cli.snow, ["queue"])
+    assert r.exit_code == 0
+    lines = r.stdout.splitlines()
+    assert lines[0].split()[:2] == ["queue", "number"]
+    assert any(l.startswith("unassigned") and "SCTASK2" in l for l in lines)
+    assert any(l.startswith("mine") and "INC1" in l for l in lines)
+    assert "Navigated to" not in r.stdout
+
+
+def test_queue_api_error(monkeypatch):
+    use_session(monkeypatch, logged_in_session([
+        ("GET", "/api/now/table/task", FakeResponse(payload={"error": {"message": "bad"}})),
+    ]))
+    r = runner().invoke(cli.snow, ["-f", "json", "queue"])
+    assert r.exit_code == 1
+    assert json.loads(r.stdout) == {"error": "api_error", "message": "bad"}
+
+
+def test_my_work_json_requests_sys_updated_on(monkeypatch):
+    sess = logged_in_session([
+        ("GET", "/api/now/table/task", FakeResponse(payload={"result": []})),
+    ])
+    use_session(monkeypatch, sess)
+    for cmd in ["my_work", "my_groups_work"]:
+        r = runner().invoke(cli.snow, ["-f", "json", cmd])
+        assert r.exit_code == 0
+        fields = api_calls(sess)[-1][2]["params"]["sysparm_fields"].split(",")
+        assert "sys_updated_on" in fields
+        assert len(fields) == len(set(fields))  # the field list does not grow per call
