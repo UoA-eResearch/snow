@@ -1,7 +1,7 @@
 import sys
 import editor
 
-from .output import fail, emit_json, EXIT_ERROR
+from .output import fail, emit_json, diag, EXIT_ERROR
 
 
 def read_message(ctx, message=None):
@@ -26,7 +26,26 @@ def read_message(ctx, message=None):
     return message
 
 
-def patch(ctx, number, field, message=None):
+# The "Awaiting Customer" state label per ticket table.  ServiceNow at UoA
+# only emails a customer-visible comment to the requester when the same
+# update moves the ticket to Awaiting Customer.  Only tables whose choice
+# list is known to have that label are listed: a label that is not in the
+# record's choice list would be stored as a bogus value.  "Awaiting
+# Customer" is a state seen on sc_task records on this instance.  Other
+# types get the comment without a state change ("state": null in json).
+AWAITING_CUSTOMER_STATE = {
+    "sc_task": "Awaiting Customer",
+}
+
+
+def _table_name(ticket):
+    sys_class_name = ticket.get("sys_class_name")
+    if isinstance(sys_class_name, dict):
+        sys_class_name = sys_class_name.get("value")
+    return sys_class_name or "task"
+
+
+def patch(ctx, number, field, message=None, awaiting_customer=False):
     BASE_URL = ctx["BASE_URL"]
     s = ctx["s"]
     if ctx.get("api"):
@@ -86,10 +105,7 @@ def patch(ctx, number, field, message=None):
         # Operation failed", close_code never written).  Verified: a change
         # closes with state "Closed" + close_code "Successful" via
         # /api/now/table/change_request/.
-        sys_class_name = ticket.get("sys_class_name")
-        if isinstance(sys_class_name, dict):
-            sys_class_name = sys_class_name.get("value")
-        table = sys_class_name or "task"
+        table = _table_name(ticket)
         if table == "change_request":
             data = {
                 "state": "Closed",
@@ -105,6 +121,17 @@ def patch(ctx, number, field, message=None):
                 }.get(table, "Resolved"),
                 "close_notes": message
             }
+    elif field == "comments" and awaiting_customer:
+        # Comment and state change in one update, on the child table
+        # endpoint so the state label converts against the record's own
+        # choice list (as resolve does).
+        new_state = AWAITING_CUSTOMER_STATE.get(_table_name(ticket))
+        if new_state:
+            table = _table_name(ticket)
+            data = {"comments": message, "state": new_state}
+        else:
+            table = "task"
+            data = {"comments": message}
     else:
         table = "task"
         data = {
@@ -117,14 +144,20 @@ def patch(ctx, number, field, message=None):
     if r.status_code == 204:
         if ctx.get("api") or ctx["format"] != "json":
             print("Success")
+            if awaiting_customer and "state" not in data:
+                diag("State not changed: no Awaiting Customer state is known "
+                     "for this ticket type.")
         else:
-            emit_json({
+            result = {
                 "ok": True,
                 "ticket_number": number,
                 "field": field,
                 "table": table,
                 "status": "success",
-            })
+            }
+            if awaiting_customer:
+                result["state"] = data.get("state")
+            emit_json(result)
         return True
 
     try:

@@ -247,6 +247,64 @@ def test_comment_with_message_json_success(monkeypatch):
     assert sess.calls[-1][2]["json"] == {"comments": "hello"}
 
 
+def test_comment_awaiting_customer_sctask_sets_state_in_same_update(monkeypatch):
+    sess = logged_in_session([
+        ("GET", "/api/now/table/task", FakeResponse(payload={
+            "result": [{"sys_id": "abc", "sys_class_name": "sc_task"}]})),
+        ("PATCH", "/api/now/table/sc_task/abc", FakeResponse(status_code=204)),
+    ])
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "comment", "SCTASK1",
+                                   "--awaiting-customer"], input="hello\nthere")
+    assert r.exit_code == 0, r.stderr
+    assert json.loads(r.stdout) == {
+        "ok": True, "ticket_number": "SCTASK1", "field": "comments",
+        "table": "sc_task", "status": "success", "state": "Awaiting Customer"}
+    patches = [c for c in sess.calls if c[0] == "PATCH"]
+    assert len(patches) == 1
+    assert patches[0][2]["json"] == {"comments": "hello\nthere",
+                                     "state": "Awaiting Customer"}
+
+
+@pytest.mark.parametrize("table", ["incident", "sc_req_item"])
+def test_comment_awaiting_customer_other_types_keep_state(monkeypatch, table):
+    sess = logged_in_session([
+        ("GET", "/api/now/table/task", FakeResponse(payload={
+            "result": [{"sys_id": "abc", "sys_class_name": table}]})),
+        ("PATCH", "/api/now/table/task/abc", FakeResponse(status_code=204)),
+    ])
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "comment", "INC1", "-m", "hi",
+                                   "--awaiting-customer"])
+    assert r.exit_code == 0, r.stderr
+    out = json.loads(r.stdout)
+    assert out["state"] is None and out["table"] == "task"
+    assert sess.calls[-1][2]["json"] == {"comments": "hi"}
+
+
+def test_comment_awaiting_customer_text_mode(monkeypatch):
+    sess = logged_in_session([
+        ("GET", "/api/now/table/task", FakeResponse(payload={
+            "result": [{"sys_id": "abc", "sys_class_name": "incident"}]})),
+        ("PATCH", "/api/now/table/task/abc", FakeResponse(status_code=204)),
+    ])
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["comment", "INC1", "-m", "hi", "--awaiting-customer"])
+    assert r.exit_code == 0
+    assert r.stdout.strip() == "Success"
+    assert "State not changed" in r.stderr
+
+
+def test_comment_awaiting_customer_empty_message_writes_nothing(monkeypatch):
+    sess = logged_in_session([])
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "--non-interactive", "comment",
+                                   "SCTASK1", "--awaiting-customer", "-m", ""])
+    assert r.exit_code == 1
+    assert json.loads(r.stdout)["error"] == "no_message"
+    assert not [c for c in sess.calls if c[0] == "PATCH"]
+
+
 def test_resolve_uses_child_table(monkeypatch):
     sess = logged_in_session([
         ("GET", "/api/now/table/task", FakeResponse(payload={
@@ -590,3 +648,4 @@ def test_my_work_json_requests_sys_updated_on(monkeypatch):
         fields = api_calls(sess)[-1][2]["params"]["sysparm_fields"].split(",")
         assert "sys_updated_on" in fields
         assert len(fields) == len(set(fields))  # the field list does not grow per call
+

@@ -312,10 +312,16 @@ def get_ticket_status(ctx, number):
 @snow.command(name="comment")
 @click.argument('number')
 @message_option
+@click.option('--awaiting-customer', 'awaiting_customer', is_flag=True, default=False,
+              help='In the same update, set the state to Awaiting Customer, '
+                   'which is what makes ServiceNow email the comment to the '
+                   'requester. Catalog tasks (SCTASK) only; other ticket '
+                   'types get the comment with the state unchanged.')
 @click.pass_context
-def comment(ctx, number, message):
+def comment(ctx, number, message, awaiting_customer):
     """Add a comment"""
-    patch.patch(ctx.obj, number, "comments", message)
+    patch.patch(ctx.obj, number, "comments", message,
+                awaiting_customer=awaiting_customer)
 
 
 @snow.command(name="worknotes")
