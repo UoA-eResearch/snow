@@ -69,6 +69,7 @@ Success documents:
 | `get_ticket_status NUMBER` | `{"ticket_number", "property": "state", "value"}` |
 | `extract_yaml NUMBER` | `{"ticket_number", "file", "content"}` |
 | `comment`, `worknotes`, `resolve`, `set_third_party_reference`, `set_customer_promise` | `{"ok": true, "ticket_number", "field", "table", "status": "success"}` |
+| `comment NUMBER --awaiting-customer` | as `comment`, plus `"state"`: `"Awaiting Customer"`, or `null` when the ticket type has no known Awaiting Customer state (the comment is still posted) |
 | `queue` | array of queue items (see below) |
 | `assign_to_me NUMBER [--if-unassigned]` | `{"ok": true, "ticket_number", "assigned_to", "already_mine"}` |
 | `add_to_watchlist NUMBER --user USER` | `{"ok": true, "ticket_number", "user", "user_sys_id", "already_watching"}` |
