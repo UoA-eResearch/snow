@@ -142,25 +142,36 @@ def add_to_watchlist(ctx, number, user):
     user_id = target["sys_id"]
     user_name = target.get("user_name") or user
 
-    ticket = _read_ticket(ctx, number, ["watch_list"])
+    ticket = _read_ticket(ctx, number, ["watch_list", "parent"])
+    watched = number
+    # A catalog task's own watch list is not on its form and is not emailed
+    # the customer comments: the request item's is (as with the email
+    # records, see `snow email_check`). So a catalog task's watcher goes on its
+    # parent RITM. Without a parent, the task's own list is all there is.
+    parent = _display(ticket.get("parent"))
+    if _value(ticket.get("sys_class_name")) == "sc_task" and parent:
+        watched = parent
+        ticket = _read_ticket(ctx, watched, ["watch_list"])
     # watch_list is a comma-separated list of sys_user sys_ids (plain
     # email addresses are allowed too).
     watchers = [w.strip() for w in _value(ticket.get("watch_list")).split(",") if w.strip()]
 
     already_watching = user_id in watchers
     if not already_watching:
-        _patch_ticket(ctx, number, ticket, {"watch_list": ",".join(watchers + [user_id])})
+        _patch_ticket(ctx, watched, ticket, {"watch_list": ",".join(watchers + [user_id])})
 
+    via = "" if watched == number else " (the request item of %s)" % number
     if ctx["format"] == "json":
         emit_json({
             "ok": True,
             "ticket_number": number,
+            "watch_list_on": watched,
             "user": user_name,
             "user_sys_id": user_id,
             "already_watching": already_watching,
         })
     elif already_watching:
-        print("%s is already watching %s" % (user_name, number))
+        print("%s is already watching %s%s" % (user_name, watched, via))
     else:
-        print("Added %s to the watch list of %s" % (user_name, number))
+        print("Added %s to the watch list of %s%s" % (user_name, watched, via))
     return True
