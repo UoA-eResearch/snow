@@ -516,7 +516,7 @@ def test_add_to_watchlist_appends(monkeypatch):
     r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "INC1", "--user", "jdoe001"])
     assert r.exit_code == 0, r.stdout + r.stderr
     assert json.loads(r.stdout) == {
-        "ok": True, "ticket_number": "INC1", "user": "jdoe001",
+        "ok": True, "ticket_number": "INC1", "watch_list_on": "INC1", "user": "jdoe001",
         "user_sys_id": "me1", "already_watching": False}
     calls = api_calls(sess)
     assert calls[0][2]["params"]["sysparm_query"] == "user_name=jdoe001"
@@ -564,6 +564,68 @@ def test_add_to_watchlist_text(monkeypatch):
     r = runner().invoke(cli.snow, ["add_to_watchlist", "INC1", "-u", "jdoe001"])
     assert r.exit_code == 0
     assert r.stdout.strip() == "Added jdoe001 to the watch list of INC1"
+
+
+def catalog_task_session(task, ritm):
+    """A catalog task and its RITM, both read from the task table by number."""
+    def ticket(url, kwargs):
+        query = kwargs["params"]["sysparm_query"]
+        return FakeResponse(payload={"result": [ritm if query == "number=RITM1" else task]})
+    return logged_in_session([
+        ("GET", "/api/now/table/sys_user", FakeResponse(payload={"result": [ME]})),
+        ("GET", "/api/now/table/task", ticket),
+        ("PATCH", "/api/now/table/", FakeResponse(status_code=204)),
+    ])
+
+
+def catalog_task(parent="RITM1", watch_list=""):
+    record = ticket_record(watch_list=watch_list, table="sc_task")
+    record["parent"] = ref("ritm9" if parent else "", parent)
+    return record
+
+
+def test_add_to_watchlist_catalog_task_goes_on_its_ritm(monkeypatch):
+    ritm = ticket_record(watch_list="w1", table="sc_req_item")
+    ritm["sys_id"] = ref("ritm9", "ritm9")
+    sess = catalog_task_session(catalog_task(), ritm)
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "SCTASK1", "-u", "jdoe001"])
+    assert r.exit_code == 0, r.stdout + r.stderr
+    assert json.loads(r.stdout) == {
+        "ok": True, "ticket_number": "SCTASK1", "watch_list_on": "RITM1", "user": "jdoe001",
+        "user_sys_id": "me1", "already_watching": False}
+    calls = api_calls(sess)
+    assert "parent" in calls[1][2]["params"]["sysparm_fields"]
+    assert calls[2][2]["params"]["sysparm_query"] == "number=RITM1"
+    assert [c for c in calls if c[0] == "PATCH"] == [calls[-1]]
+    assert calls[-1][1].endswith("/api/now/table/sc_req_item/ritm9")
+    assert calls[-1][2]["json"] == {"watch_list": "w1,me1"}
+
+    use_session(monkeypatch, catalog_task_session(catalog_task(), ritm))
+    r = runner().invoke(cli.snow, ["add_to_watchlist", "SCTASK1", "-u", "jdoe001"])
+    assert r.stdout.strip() == \
+        "Added jdoe001 to the watch list of RITM1 (the request item of SCTASK1)"
+
+
+def test_add_to_watchlist_catalog_task_already_on_ritm(monkeypatch):
+    # Watching the task itself does not count: the RITM's list is the one read.
+    ritm = ticket_record(watch_list="me1", table="sc_req_item")
+    sess = catalog_task_session(catalog_task(watch_list=""), ritm)
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "SCTASK1", "-u", "jdoe001"])
+    doc = json.loads(r.stdout)
+    assert doc["already_watching"] is True and doc["watch_list_on"] == "RITM1"
+    assert not [c for c in sess.calls if c[0] == "PATCH"]
+
+
+def test_add_to_watchlist_catalog_task_without_parent(monkeypatch):
+    sess = catalog_task_session(catalog_task(parent=""), None)
+    use_session(monkeypatch, sess)
+    r = runner().invoke(cli.snow, ["-f", "json", "add_to_watchlist", "SCTASK1", "-u", "jdoe001"])
+    assert r.exit_code == 0
+    assert json.loads(r.stdout)["watch_list_on"] == "SCTASK1"
+    assert sess.calls[-1][1].endswith("/api/now/table/sc_task/abc")
+    assert sess.calls[-1][2]["json"] == {"watch_list": "me1"}
 
 
 def test_add_to_watchlist_requires_user(monkeypatch):

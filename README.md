@@ -72,7 +72,7 @@ Success documents:
 | `comment NUMBER --awaiting-customer` | as `comment`, plus `"state"`: `"Awaiting Customer"`, or `null` when the ticket type has no known Awaiting Customer state (the comment is still posted) |
 | `queue` | array of queue items (see below) |
 | `assign_to_me NUMBER [--if-unassigned]` | `{"ok": true, "ticket_number", "assigned_to", "already_mine"}` |
-| `add_to_watchlist NUMBER --user USER` | `{"ok": true, "ticket_number", "user", "user_sys_id", "already_watching"}` |
+| `add_to_watchlist NUMBER --user USER` | `{"ok": true, "ticket_number", "watch_list_on", "user", "user_sys_id", "already_watching"}` |
 
 `my_work` / `my_groups_work` records include `sys_updated_on` in json mode.
 
@@ -167,6 +167,10 @@ very small window between that read and the write remains.
 email address if `USER` contains `@`) to the ticket's watch list. It is
 idempotent: if the user is already watching, nothing is written and
 `"already_watching": true`. `"user"` in the result is the resolved username.
+A catalog task (SCTASK) is the exception: its own watch list is not on its
+form and is not emailed the customer comments, so the user goes on its
+parent request item (RITM) instead. `"watch_list_on"` in the result names the
+ticket whose watch list was read and written (the RITM, or the ticket itself).
 
 ```bash
 snow -f json --non-interactive queue
